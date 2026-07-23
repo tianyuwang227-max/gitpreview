@@ -1,7 +1,9 @@
 (function() {
   'use strict';
 
-  const API_BASE = 'http://localhost:3000';
+  let API_BASE = 'http://localhost:3000';
+  let ws = null;
+  let currentTaskId = null;
 
   function isRepoPage() {
     const path = window.location.pathname;
@@ -44,7 +46,13 @@
       <div class="gitpreview-content">
         <div class="gitpreview-loading">
           <div class="gitpreview-spinner"></div>
-          <p>Loading preview...</p>
+          <p class="gitpreview-loading-text">Loading preview...</p>
+          <div class="gitpreview-progress-container">
+            <div class="gitpreview-progress-bar">
+              <div class="gitpreview-progress-fill"></div>
+            </div>
+            <div class="gitpreview-progress-text">0%</div>
+          </div>
         </div>
         <div class="gitpreview-result" style="display: none;">
           <div class="gitpreview-screenshot">
@@ -172,6 +180,37 @@
         100% { transform: rotate(360deg); }
       }
 
+      .gitpreview-loading-text {
+        margin-bottom: 16px;
+      }
+
+      .gitpreview-progress-container {
+        width: 100%;
+        max-width: 300px;
+      }
+
+      .gitpreview-progress-bar {
+        width: 100%;
+        height: 6px;
+        background: #21262d;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+
+      .gitpreview-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #58a6ff, #3fb950);
+        border-radius: 3px;
+        transition: width 0.3s ease;
+        width: 0%;
+      }
+
+      .gitpreview-progress-text {
+        font-size: 12px;
+        text-align: center;
+      }
+
       .gitpreview-screenshot {
         margin-bottom: 20px;
         border-radius: 8px;
@@ -279,6 +318,91 @@
     document.head.appendChild(style);
   }
 
+  function connectWebSocket(panel) {
+    const protocol = API_BASE.startsWith('https') ? 'wss:' : 'ws:';
+    const wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws';
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('GitPreview WebSocket connected');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        handleWebSocketMessage(message, panel);
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('GitPreview WebSocket disconnected');
+      ws = null;
+    };
+
+    ws.onerror = (error) => {
+      console.error('GitPreview WebSocket error:', error);
+    };
+  }
+
+  function handleWebSocketMessage(message, panel) {
+    switch (message.type) {
+      case 'connected':
+        console.log('GitPreview WebSocket client ID:', message.data?.clientId);
+        break;
+
+      case 'progress':
+        if (message.taskId === currentTaskId) {
+          updateProgressUI(panel, message.progress, message.message);
+        }
+        break;
+
+      case 'completed':
+        if (message.taskId === currentTaskId) {
+          showPreview(panel, message.data);
+          currentTaskId = null;
+        }
+        break;
+
+      case 'error':
+        if (message.taskId === currentTaskId) {
+          showError(panel, message.message);
+          currentTaskId = null;
+        }
+        break;
+    }
+  }
+
+  function subscribeToTask(taskId, panel) {
+    currentTaskId = taskId;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'subscribe', taskId }));
+    } else {
+      connectWebSocket(panel);
+      setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'subscribe', taskId }));
+        }
+      }, 1000);
+    }
+  }
+
+  function updateProgressUI(panel, progress, message) {
+    const loading = panel.querySelector('.gitpreview-loading');
+    const progressFill = loading.querySelector('.gitpreview-progress-fill');
+    const progressText = loading.querySelector('.gitpreview-progress-text');
+    const loadingText = loading.querySelector('.gitpreview-loading-text');
+
+    progressFill.style.width = `${progress}%`;
+    progressText.textContent = `${progress}%`;
+
+    if (message) {
+      loadingText.textContent = message;
+    }
+  }
+
   async function fetchPreview(repoInfo) {
     const response = await fetch(`${API_BASE}/api/preview`, {
       method: 'POST',
@@ -298,7 +422,7 @@
     return data.data.taskId;
   }
 
-  async function pollTaskStatus(taskId, maxAttempts = 60) {
+  async function pollTaskStatus(taskId, panel, maxAttempts = 60) {
     for (let i = 0; i < maxAttempts; i++) {
       const response = await fetch(`${API_BASE}/api/tasks/${taskId}`);
       const data = await response.json();
@@ -315,6 +439,10 @@
 
       if (status === 'failed') {
         throw new Error(error || 'Preview failed');
+      }
+
+      if (progress !== undefined) {
+        updateProgressUI(panel, progress, null);
       }
 
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -402,16 +530,30 @@
     closeBtn.addEventListener('click', () => {
       panel.remove();
       overlay.remove();
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      currentTaskId = null;
     });
 
     overlay.addEventListener('click', () => {
       panel.remove();
       overlay.remove();
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      currentTaskId = null;
     });
 
     try {
+      connectWebSocket(panel);
+
       const taskId = await fetchPreview(repoInfo);
-      const result = await pollTaskStatus(taskId);
+      subscribeToTask(taskId, panel);
+
+      const result = await pollTaskStatus(taskId, panel);
       showPreview(panel, result);
     } catch (error) {
       showError(panel, error.message);
@@ -450,6 +592,17 @@
     }
   }
 
+  async function loadSettings() {
+    try {
+      const result = await chrome.storage.sync.get(['serverUrl']);
+      if (result.serverUrl) {
+        API_BASE = result.serverUrl;
+      }
+    } catch (error) {
+      console.log('Using default server URL:', API_BASE);
+    }
+  }
+
   function init() {
     injectStyles();
     injectButton();
@@ -466,8 +619,11 @@
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadSettings();
+      init();
+    });
   } else {
-    init();
+    loadSettings().then(() => init());
   }
 })();

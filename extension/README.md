@@ -8,6 +8,7 @@ Chrome 浏览器扩展，让用户在 GitHub 页面直接预览仓库。
 - 点击按钮弹出预览窗口
 - 显示仓库截图、分析信息、技术栈
 - 支持自定义服务器地址
+- 实时 WebSocket 进度更新
 
 ## 安装
 
@@ -53,3 +54,11 @@ extension/
 | activeTab | 访问当前标签页 |
 | storage | 保存设置 |
 | host_permissions | 访问 GitHub 和本地服务器 |
+
+## WebSocket 支持
+
+扩展支持 WebSocket 实时进度更新：
+- 自动连接到 GitPreview 服务器的 WebSocket
+- 订阅任务进度更新
+- 实时显示加载进度条
+- 断线自动重连

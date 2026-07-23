@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusText = document.getElementById('statusText');
   const message = document.getElementById('message');
 
-  const stored = await chrome.storage.local.get(['serverUrl']);
+  const stored = await chrome.storage.sync.get(['serverUrl']);
   if (stored.serverUrl) {
     serverUrlInput.value = stored.serverUrl;
   }
@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    await chrome.storage.local.set({ serverUrl: url });
+    await chrome.storage.sync.set({ serverUrl: url });
     showMessage('Settings saved!', 'success');
 
     await checkConnection();
