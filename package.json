@@ -1,21 +1,18 @@
 {
   "name": "gitpreview",
   "version": "1.0.0",
-  "description": "Preview GitHub projects without manual deployment",
-  "main": "dist/index.js",
+  "description": "Preview GitHub projects without deployment",
+  "main": "dist/modules/web-server/index.js",
   "scripts": {
     "dev": "ts-node src/modules/web-server/index.ts",
-    "dev:cli": "ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/modules/web-server/index.js",
     "test": "jest",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist projects data",
+    "vercel-build": "npm run build"
   },
-  "keywords": [
-    "github",
-    "preview",
-    "demo"
-  ],
+  "keywords": ["github", "preview", "demo"],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -33,12 +30,15 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.10.0",
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
-    "@typescript-eslint/parser": "^8.65.0",
-    "eslint": "^10.7.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.50.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
