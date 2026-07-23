@@ -163,7 +163,7 @@ async function getAllFiles(repoPath: string): Promise<string[]> {
   return files;
 }
 
-function detectFrameworks(packageJson: any, files: string[]): string[] {
+function detectFrameworks(packageJson: any, _files: string[]): string[] {
   const frameworks = new Set<string>();
 
   if (packageJson) {
@@ -198,7 +198,7 @@ function detectTools(files: string[], packageJson: any): string[] {
     };
 
     if (allDeps['tailwindcss']) tools.add('Tailwind');
-    if (allDES['eslint']) tools.add('ESLint');
+    if (allDeps['eslint']) tools.add('ESLint');
     if (allDeps['prettier']) tools.add('Prettier');
   }
 

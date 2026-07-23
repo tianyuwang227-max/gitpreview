@@ -565,23 +565,49 @@
 
     let ws = null;
     let currentTaskId = null;
+    let pendingTaskId = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
 
     function connectWebSocket() {
+      if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
+        return;
+      }
+
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
       ws.onopen = () => {
         console.log('WebSocket connected');
+        reconnectAttempts = 0;
+
+        if (currentTaskId) {
+          subscribeToTask(currentTaskId);
+        } else if (pendingTaskId) {
+          subscribeToTask(pendingTaskId);
+          pendingTaskId = null;
+        }
       };
 
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        handleWebSocketMessage(message);
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
       };
 
       ws.onclose = () => {
         console.log('WebSocket disconnected');
-        setTimeout(connectWebSocket, 3000);
+        ws = null;
+
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts})`);
+          setTimeout(connectWebSocket, delay);
+        }
       };
 
       ws.onerror = (error) => {
@@ -623,8 +649,14 @@
 
     function subscribeToTask(taskId) {
       currentTaskId = taskId;
+
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'subscribe', taskId }));
+      } else {
+        pendingTaskId = taskId;
+        if (!ws || ws.readyState === WebSocket.CLOSED) {
+          connectWebSocket();
+        }
       }
     }
 

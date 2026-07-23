@@ -1,10 +1,8 @@
-import path from 'path';
-import { detectProject, generateDockerfile } from './detector';
-import { buildImage, removeImage, imageExists } from './builder';
+import { detectProject } from './detector';
+import { buildImage, removeImage } from './builder';
 import { runContainer, stopContainer, getContainerLogs } from './runner';
 import { captureRunningApp, waitForAppReady } from './capturer';
-import { ProjectConfig, ContainerInfo, DockerResult } from './types';
-import { config } from '../../config';
+import { ContainerInfo } from './types';
 import { logger } from '../../utils/logger';
 
 export { detectProject, generateDockerfile } from './detector';

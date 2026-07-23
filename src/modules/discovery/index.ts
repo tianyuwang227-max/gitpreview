@@ -1,7 +1,7 @@
-import { searchProjects, getTrending, getRepoDetails, getReposByTopic, getReposByLanguage } from './github';
-import { getCategories, getCategoryByTopic } from './categories';
+import { getTrending, getRepoDetails } from './github';
+import { getCategories } from './categories';
 import { favoritesManager } from './favorites';
-import { Project, SearchResult, Category, FavoriteProject, SortOption, OrderOption } from './types';
+import { Project, Category, FavoriteProject } from './types';
 import { logger } from '../../utils/logger';
 
 export { searchProjects, getTrending, getRepoDetails, getReposByTopic, getReposByLanguage } from './github';

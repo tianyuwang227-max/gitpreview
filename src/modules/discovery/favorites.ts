@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { FavoriteProject, Project } from './types';
-import { config } from '../../config';
 import { logger } from '../../utils/logger';
 
 const FAVORITES_FILE = path.join(process.cwd(), 'data', 'favorites.json');

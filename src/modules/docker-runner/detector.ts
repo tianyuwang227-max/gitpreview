@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { ProjectType, ProjectConfig, PROJECT_DETECTION_RULES } from './types';
+import { ProjectConfig, PROJECT_DETECTION_RULES } from './types';
 import { logger } from '../../utils/logger';
 
 const FRAMEWORK_DETECTION: Record<string, Partial<ProjectConfig>> = {

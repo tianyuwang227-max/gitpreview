@@ -1,3 +1,5 @@
+import { WebSocket } from 'ws';
+
 export interface WebSocketMessage {
   type: 'progress' | 'completed' | 'error' | 'connected';
   taskId?: string;
@@ -16,6 +18,6 @@ export interface ProgressUpdate {
 
 export interface WebSocketClient {
   id: string;
-  ws: any;
+  ws: WebSocket;
   subscribedTasks: Set<string>;
 }

@@ -14,7 +14,7 @@ import {
   removeFromFavorites,
   isFavorite,
 } from '../discovery';
-import { wsManager, sendProgress, sendCompleted, sendError } from '../websocket';
+import { sendProgress, sendCompleted } from '../websocket';
 import {
   addToHistory,
   getHistory,
@@ -27,8 +27,8 @@ import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
 import { taskQueue } from '../../utils/task-queue';
-import { cacheMiddleware, clearCache, getCacheStats } from '../../utils/cache-middleware';
-import { perfMonitor, measureAsync } from '../../utils/performance';
+import { getCacheStats } from '../../utils/cache-middleware';
+import { perfMonitor } from '../../utils/performance';
 import { ApiResponse, RepoPreviewResponse } from './types';
 
 export function createServer() {
@@ -138,7 +138,7 @@ export function createServer() {
       description: result.repo.description,
       language: result.repo.language,
       stars: result.repo.stars,
-      previewType: result.preview.type,
+      previewType: result.preview.type as 'screenshot' | 'live',
       thumbnailPath: result.screenshot.imagePath,
     }).catch(err => logger.error('Failed to add to history', { err }));
 
@@ -332,7 +332,7 @@ export function createServer() {
   });
 
   app.delete('/api/history/:id', async (req: Request, res: Response, next: NextFunction) => {
-    const { id } = req.params;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
     try {
       const removed = await removeFromHistory(id);
@@ -397,6 +397,10 @@ export function createServer() {
         success: true,
         data: {
           repo: cloneResult.repo,
+          preview: {
+            type: 'screenshot',
+            imagePath: `/screenshots/${path.basename(screenshotResult.imagePath)}`,
+          },
           screenshot: {
             imagePath: `/screenshots/${path.basename(screenshotResult.imagePath)}`,
             url: screenshotResult.url,
@@ -413,7 +417,7 @@ export function createServer() {
   });
 
   app.get('/api/tasks/:taskId', (req: Request, res: Response) => {
-    const { taskId } = req.params;
+    const taskId = Array.isArray(req.params.taskId) ? req.params.taskId[0] : req.params.taskId;
     const status = taskQueue.getStatus(taskId);
 
     if (!status) {
@@ -431,7 +435,7 @@ export function createServer() {
     });
   });
 
-  app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  app.use((error: Error, req: Request, res: Response, _next: NextFunction) => {
     logger.error('Request error', { error, path: req.path });
 
     if (error instanceof AppError) {

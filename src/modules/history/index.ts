@@ -1,6 +1,5 @@
 import { historyManager } from './storage';
 import { HistoryEntry, HistoryFilter, HistoryStats } from './types';
-import { logger } from '../../utils/logger';
 
 export { historyManager } from './storage';
 export type { HistoryEntry, HistoryFilter, HistoryStats } from './types';

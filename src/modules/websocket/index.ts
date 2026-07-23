@@ -1,10 +1,11 @@
+import { Server } from 'http';
 import { wsManager } from './manager';
 import { logger } from '../../utils/logger';
 
 export { wsManager } from './manager';
 export type { WebSocketMessage, ProgressUpdate, WebSocketClient } from './types';
 
-export function initWebSocket(server: any): void {
+export function initWebSocket(server: Server): void {
   wsManager.init(server);
   logger.info('WebSocket module initialized');
 }

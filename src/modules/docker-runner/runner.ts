@@ -77,14 +77,15 @@ export async function getContainerInfo(containerName: string): Promise<Container
 
     const [id, status, portsJson] = stdout.trim().split(' ');
     const ports = JSON.parse(portsJson.replace(/'/g, '"'));
-    const port = Object.values(ports)[0]?.[0]?.HostPort || 0;
+    const firstPort = Object.values(ports)[0] as any[];
+    const port = firstPort?.[0]?.HostPort || 0;
 
     return {
       id,
       name: containerName,
       image: '',
       status,
-      port: parseInt(port as string),
+      port: parseInt(String(port)),
       url: `http://localhost:${port}`,
       startedAt: new Date(),
     };

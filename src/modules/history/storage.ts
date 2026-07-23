@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { HistoryEntry, HistoryFilter, HistoryStats } from './types';
-import { config } from '../../config';
 import { logger } from '../../utils/logger';
 
 const HISTORY_FILE = path.join(process.cwd(), 'data', 'history.json');

@@ -1,5 +1,4 @@
 import { Category } from './types';
-import { logger } from '../../utils/logger';
 
 export const DEFAULT_CATEGORIES: Category[] = [
   {

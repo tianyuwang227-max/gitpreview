@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { WebSocketMessage, WebSocketClient, ProgressUpdate } from './types';
 import { logger } from '../../utils/logger';
+import { taskQueue } from '../../utils/task-queue';
 
 export class WebSocketManager {
   private wss: WebSocketServer | null = null;
@@ -59,6 +60,7 @@ export class WebSocketManager {
       case 'subscribe':
         if (message.taskId) {
           this.subscribeToTask(clientId, message.taskId);
+          this.sendCurrentTaskStatus(client.ws, message.taskId);
         }
         break;
 
@@ -75,6 +77,36 @@ export class WebSocketManager {
           timestamp: new Date().toISOString(),
         });
         break;
+    }
+  }
+
+  private sendCurrentTaskStatus(ws: WebSocket, taskId: string): void {
+    const status = taskQueue.getStatus(taskId);
+    if (!status) return;
+
+    if (status.status === 'completed' && status.result) {
+      this.sendMessage(ws, {
+        type: 'completed',
+        taskId,
+        data: status.result,
+        progress: 100,
+        timestamp: new Date().toISOString(),
+      });
+    } else if (status.status === 'failed' && status.error) {
+      this.sendMessage(ws, {
+        type: 'error',
+        taskId,
+        message: status.error,
+        timestamp: new Date().toISOString(),
+      });
+    } else if (status.status === 'processing') {
+      this.sendMessage(ws, {
+        type: 'progress',
+        taskId,
+        progress: status.progress,
+        message: 'Processing...',
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 
@@ -215,6 +247,14 @@ export class WebSocketManager {
       connectedClients: this.clients.size,
       activeTasks: this.taskSubscribers.size,
     };
+  }
+
+  getClientCount(): number {
+    return this.clients.size;
+  }
+
+  getTaskSubscriberCount(taskId: string): number {
+    return this.taskSubscribers.get(taskId)?.size || 0;
   }
 
   close(): void {

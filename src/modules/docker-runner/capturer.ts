@@ -1,4 +1,4 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import { ContainerInfo } from './types';
 import { logger } from '../../utils/logger';
 

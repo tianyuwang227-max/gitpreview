@@ -21,13 +21,30 @@ export interface TaskResult {
 }
 
 type TaskHandler = (task: Task) => Promise<any>;
+type TaskEventListener = (task: Task) => void;
 
 export class TaskQueue {
   private tasks: Map<string, Task> = new Map();
   private handlers: Map<string, TaskHandler> = new Map();
+  private onCompleteListeners: Map<string, TaskEventListener[]> = new Map();
+  private onFailListeners: Map<string, TaskEventListener[]> = new Map();
 
   registerHandler(taskType: string, handler: TaskHandler): void {
     this.handlers.set(taskType, handler);
+  }
+
+  onTaskComplete(taskType: string, listener: TaskEventListener): void {
+    if (!this.onCompleteListeners.has(taskType)) {
+      this.onCompleteListeners.set(taskType, []);
+    }
+    this.onCompleteListeners.get(taskType)!.push(listener);
+  }
+
+  onTaskFail(taskType: string, listener: TaskEventListener): void {
+    if (!this.onFailListeners.has(taskType)) {
+      this.onFailListeners.set(taskType, []);
+    }
+    this.onFailListeners.get(taskType)!.push(listener);
   }
 
   async enqueue(taskType: string, data: any): Promise<string> {
@@ -81,6 +98,7 @@ export class TaskQueue {
       task.status = 'failed';
       task.error = `No handler for task type: ${task.type}`;
       task.completedAt = new Date();
+      this.notifyListeners(task, 'fail');
       return;
     }
 
@@ -94,10 +112,26 @@ export class TaskQueue {
       task.result = result;
       task.progress = 100;
       task.completedAt = new Date();
+      this.notifyListeners(task, 'complete');
     } catch (error) {
       task.status = 'failed';
       task.error = error instanceof Error ? error.message : 'Unknown error';
       task.completedAt = new Date();
+      this.notifyListeners(task, 'fail');
+    }
+  }
+
+  private notifyListeners(task: Task, event: 'complete' | 'fail'): void {
+    const listeners = event === 'complete'
+      ? this.onCompleteListeners.get(task.type) || []
+      : this.onFailListeners.get(task.type) || [];
+
+    for (const listener of listeners) {
+      try {
+        listener(task);
+      } catch (error) {
+        console.error(`Error in task ${event} listener:`, error);
+      }
     }
   }
 

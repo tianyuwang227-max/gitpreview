@@ -2,7 +2,7 @@ import { validateGithubUrl } from './validator';
 import { fetchRepoInfo } from './fetcher';
 import { cloneRepo } from './cloner';
 import { repoStorage } from './storage';
-import { CloneResult, RepoInfo } from './types';
+import { CloneResult } from './types';
 import { logger } from '../../utils/logger';
 
 export { validateGithubUrl } from './validator';
