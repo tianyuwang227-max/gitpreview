@@ -14,6 +14,7 @@ import {
   removeFromFavorites,
   isFavorite,
 } from '../discovery';
+import { wsManager, sendProgress, sendCompleted, sendError } from '../websocket';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -32,25 +33,31 @@ export function createServer() {
     const { url, useDocker = false } = task.data;
     logger.info(`Processing async task ${task.id} for URL: ${url}`);
 
+    sendProgress(task.id, 10, '正在验证 URL...');
     taskQueue.updateProgress(task.id, 10);
 
     const cloneResult = await processGithubUrl(url);
 
+    sendProgress(task.id, 25, '正在克隆仓库...');
     taskQueue.updateProgress(task.id, 25);
 
     const analysis = await analyzeRepo(cloneResult.localPath);
 
+    sendProgress(task.id, 40, '正在分析项目...');
     taskQueue.updateProgress(task.id, 40);
 
     let screenshotPath: string;
     let dockerResult: any = null;
 
     if (useDocker) {
+      sendProgress(task.id, 50, '正在启动 Docker 容器...');
       logger.info('Using Docker for live preview');
       dockerResult = await runAndCapture(
         cloneResult.localPath,
         cloneResult.repo.name.toLowerCase()
       );
+
+      sendProgress(task.id, 70, '正在截取预览图...');
 
       if (dockerResult.success && dockerResult.screenshot) {
         screenshotPath = dockerResult.screenshot;
@@ -63,6 +70,7 @@ export function createServer() {
         screenshotPath = screenshotResult.imagePath;
       }
     } else {
+      sendProgress(task.id, 60, '正在截取预览图...');
       const screenshotResult = await captureGitHubRepo(
         cloneResult.repo.owner,
         cloneResult.repo.name
@@ -70,9 +78,10 @@ export function createServer() {
       screenshotPath = screenshotResult.imagePath;
     }
 
+    sendProgress(task.id, 90, '正在整理数据...');
     taskQueue.updateProgress(task.id, 90);
 
-    return {
+    const result = {
       repo: cloneResult.repo,
       analysis: {
         readme: {
@@ -108,6 +117,9 @@ export function createServer() {
         },
       },
     };
+
+    sendCompleted(task.id, result);
+    return result;
   });
 
   app.get('/api/health', (req: Request, res: Response) => {

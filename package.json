@@ -12,7 +12,11 @@
     "clean": "rm -rf dist projects data",
     "vercel-build": "npm run build"
   },
-  "keywords": ["github", "preview", "demo"],
+  "keywords": [
+    "github",
+    "preview",
+    "demo"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -23,7 +27,8 @@
     "puppeteer": "^25.3.0",
     "puppeteer-core": "^25.3.0",
     "simple-git": "^3.22.0",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
