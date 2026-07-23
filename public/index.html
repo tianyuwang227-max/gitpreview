@@ -300,6 +300,127 @@
       background: #6e7681;
       color: white;
     }
+
+    .analysis-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #30363d;
+    }
+
+    .analysis-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e6edf3;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tech-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tech-tag {
+      padding: 4px 10px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      color: #8b949e;
+    }
+
+    .tech-tag.language {
+      background: #1f6feb22;
+      border-color: #1f6feb;
+      color: #58a6ff;
+    }
+
+    .tech-tag.framework {
+      background: #23863622;
+      border-color: #238636;
+      color: #3fb950;
+    }
+
+    .directory-tree {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: #8b949e;
+      overflow-x: auto;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .commits-list {
+      list-style: none;
+    }
+
+    .commit-item {
+      padding: 8px 0;
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      gap: 12px;
+      font-size: 0.9rem;
+    }
+
+    .commit-hash {
+      color: #58a6ff;
+      font-family: monospace;
+      min-width: 60px;
+    }
+
+    .commit-message {
+      color: #e6edf3;
+      flex: 1;
+    }
+
+    .commit-date {
+      color: #484f58;
+      font-size: 0.8rem;
+    }
+
+    .readme-summary {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      color: #8b949e;
+      line-height: 1.6;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .meta-item {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .meta-value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+
+    .meta-label {
+      font-size: 0.8rem;
+      color: #484f58;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -357,7 +478,27 @@
               <span>Forks:</span>
               <span class="stat-value" id="repoForks"></span>
             </div>
+            <div class="stat">
+              <span>License:</span>
+              <span class="stat-value" id="repoLicense"></span>
+            </div>
           </div>
+        </div>
+
+        <div class="analysis-section" id="analysisSection">
+          <div class="meta-grid" id="metaGrid"></div>
+
+          <div class="analysis-title">Languages & Frameworks</div>
+          <div class="tech-tags" id="techTags"></div>
+
+          <div class="analysis-title">README Summary</div>
+          <div class="readme-summary" id="readmeSummary"></div>
+
+          <div class="analysis-title">Directory Structure</div>
+          <div class="directory-tree" id="directoryTree"></div>
+
+          <div class="analysis-title">Recent Commits</div>
+          <ul class="commits-list" id="commitsList"></ul>
         </div>
       </div>
     </div>
@@ -483,7 +624,83 @@
       document.getElementById('repoStars').textContent = formatNumber(data.repo.stars);
       document.getElementById('repoForks').textContent = formatNumber(data.repo.forks);
       document.getElementById('githubLink').href = data.repo.url;
+
+      if (data.analysis) {
+        renderAnalysis(data.analysis);
+      }
+
       preview.classList.add('active');
+    }
+
+    function renderAnalysis(analysis) {
+      document.getElementById('repoLicense').textContent = analysis.license || 'Unknown';
+
+      const metaGrid = document.getElementById('metaGrid');
+      metaGrid.innerHTML = `
+        <div class="meta-item">
+          <div class="meta-value">${analysis.directory.totalFiles}</div>
+          <div class="meta-label">Files</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-value">${analysis.directory.totalDirs}</div>
+          <div class="meta-label">Directories</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-value">${analysis.readme.sections}</div>
+          <div class="meta-label">README Sections</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-value">${analysis.recentCommits.length}</div>
+          <div class="meta-label">Recent Commits</div>
+        </div>
+      `;
+
+      const techTags = document.getElementById('techTags');
+      techTags.innerHTML = '';
+
+      if (analysis.techStack.languages) {
+        analysis.techStack.languages.forEach(lang => {
+          const tag = document.createElement('span');
+          tag.className = 'tech-tag language';
+          tag.textContent = `${lang.name} ${lang.percentage}%`;
+          techTags.appendChild(tag);
+        });
+      }
+
+      if (analysis.techStack.frameworks) {
+        analysis.techStack.frameworks.forEach(fw => {
+          const tag = document.createElement('span');
+          tag.className = 'tech-tag framework';
+          tag.textContent = fw;
+          techTags.appendChild(tag);
+        });
+      }
+
+      analysis.techStack.tools.forEach(tool => {
+        const tag = document.createElement('span');
+        tag.className = 'tech-tag';
+        tag.textContent = tool;
+        techTags.appendChild(tag);
+      });
+
+      const packageManagerTag = document.createElement('span');
+      packageManagerTag.className = 'tech-tag';
+      packageManagerTag.textContent = analysis.techStack.packageManager;
+      techTags.appendChild(packageManagerTag);
+
+      document.getElementById('readmeSummary').textContent = analysis.readme.summary;
+
+      const directoryTree = document.getElementById('directoryTree');
+      directoryTree.textContent = analysis.directory.tree;
+
+      const commitsList = document.getElementById('commitsList');
+      commitsList.innerHTML = analysis.recentCommits.map(commit => `
+        <li class="commit-item">
+          <span class="commit-hash">${commit.hash}</span>
+          <span class="commit-message">${commit.message}</span>
+          <span class="commit-date">${new Date(commit.date).toLocaleDateString()}</span>
+        </li>
+      `).join('');
     }
 
     function updateProgress(progress) {

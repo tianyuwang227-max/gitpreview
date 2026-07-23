@@ -4,6 +4,7 @@ import path from 'path';
 import { processGithubUrl } from '../github-repo-manager';
 import { captureGitHubRepo } from '../screenshot-service';
 import { runAndCapture } from '../docker-runner';
+import { analyzeRepo } from '../repo-analyzer';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -26,7 +27,11 @@ export function createServer() {
 
     const cloneResult = await processGithubUrl(url);
 
-    taskQueue.updateProgress(task.id, 30);
+    taskQueue.updateProgress(task.id, 25);
+
+    const analysis = await analyzeRepo(cloneResult.localPath);
+
+    taskQueue.updateProgress(task.id, 40);
 
     let screenshotPath: string;
     let dockerResult: any = null;
@@ -60,6 +65,23 @@ export function createServer() {
 
     return {
       repo: cloneResult.repo,
+      analysis: {
+        readme: {
+          summary: analysis.readme.summary,
+          hasImages: analysis.readme.hasImages,
+          hasBadges: analysis.readme.hasBadges,
+          sections: analysis.readme.sections.length,
+        },
+        directory: {
+          tree: analysis.directory.tree,
+          totalFiles: analysis.directory.totalFiles,
+          totalDirs: analysis.directory.totalDirs,
+        },
+        techStack: analysis.techStack,
+        recentCommits: analysis.recentCommits,
+        license: analysis.license,
+        lastUpdated: analysis.lastUpdated,
+      },
       preview: {
         type: useDocker && dockerResult?.success ? 'live' : 'screenshot',
         imagePath: `/screenshots/${path.basename(screenshotPath)}`,
