@@ -5,6 +5,15 @@ import { processGithubUrl } from '../github-repo-manager';
 import { captureGitHubRepo } from '../screenshot-service';
 import { runAndCapture } from '../docker-runner';
 import { analyzeRepo } from '../repo-analyzer';
+import {
+  getDiscoveryData,
+  searchProjects,
+  getTrending,
+  getCategories,
+  addToFavorites,
+  removeFromFavorites,
+  isFavorite,
+} from '../discovery';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -113,6 +122,144 @@ export function createServer() {
     res.json(response);
   });
 
+  app.get('/api/discovery', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const data = await getDiscoveryData();
+      res.json({
+        success: true,
+        data,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/search', async (req: Request, res: Response, next: NextFunction) => {
+    const { q, page = 1, per_page = 30, sort, order = 'desc' } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_QUERY', message: 'Search query is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    try {
+      const results = await searchProjects(
+        q as string,
+        parseInt(page as string),
+        parseInt(per_page as string),
+        sort as any,
+        order as any
+      );
+
+      res.json({
+        success: true,
+        data: results,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/trending', async (req: Request, res: Response, next: NextFunction) => {
+    const { language, since = 'weekly' } = req.query;
+
+    try {
+      const projects = await getTrending(
+        language as string,
+        since as 'daily' | 'weekly' | 'monthly'
+      );
+
+      res.json({
+        success: true,
+        data: { projects },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/categories', (req: Request, res: Response) => {
+    const categories = getCategories();
+    res.json({
+      success: true,
+      data: { categories },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/favorites', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { favoritesManager } = await import('../discovery');
+      const favorites = await favoritesManager.getAllFavorites();
+      res.json({
+        success: true,
+        data: { favorites },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/favorites', async (req: Request, res: Response, next: NextFunction) => {
+    const { fullName, notes } = req.body;
+
+    if (!fullName) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'fullName is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    try {
+      await addToFavorites(fullName, notes);
+      res.json({
+        success: true,
+        data: { message: 'Added to favorites' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/favorites/:owner/:repo', async (req: Request, res: Response, next: NextFunction) => {
+    const { owner, repo } = req.params;
+
+    try {
+      const removed = await removeFromFavorites(`${owner}/${repo}`);
+      res.json({
+        success: true,
+        data: { removed },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/favorites/check/:owner/:repo', async (req: Request, res: Response, next: NextFunction) => {
+    const { owner, repo } = req.params;
+
+    try {
+      const isFav = await isFavorite(`${owner}/${repo}`);
+      res.json({
+        success: true,
+        data: { isFavorite: isFav },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/preview', async (req: Request, res: Response, next: NextFunction) => {
     const { url, async: isAsync } = req.body;
 
@@ -204,6 +351,18 @@ export function createServer() {
       },
       timestamp: new Date().toISOString(),
     });
+  });
+
+  app.get('/discover', (req: Request, res: Response) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'discover.html'));
+  });
+
+  app.get('/search', (req: Request, res: Response) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'search.html'));
+  });
+
+  app.get('/favorites', (req: Request, res: Response) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'discover.html'));
   });
 
   app.get('*', (req: Request, res: Response) => {
