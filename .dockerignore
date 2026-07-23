@@ -1,0 +1,8 @@
+node_modules
+dist
+projects
+data
+.git
+.env
+*.md
+tests
