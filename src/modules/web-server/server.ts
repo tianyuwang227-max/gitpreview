@@ -15,10 +15,20 @@ import {
   isFavorite,
 } from '../discovery';
 import { wsManager, sendProgress, sendCompleted, sendError } from '../websocket';
+import {
+  addToHistory,
+  getHistory,
+  searchHistory,
+  getHistoryStats,
+  removeFromHistory,
+  clearHistory,
+} from '../history';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
 import { taskQueue } from '../../utils/task-queue';
+import { cacheMiddleware, clearCache, getCacheStats } from '../../utils/cache-middleware';
+import { perfMonitor, measureAsync } from '../../utils/performance';
 import { ApiResponse, RepoPreviewResponse } from './types';
 
 export function createServer() {
@@ -119,6 +129,19 @@ export function createServer() {
     };
 
     sendCompleted(task.id, result);
+
+    addToHistory({
+      url,
+      owner: result.repo.owner,
+      name: result.repo.name,
+      fullName: result.repo.fullName,
+      description: result.repo.description,
+      language: result.repo.language,
+      stars: result.repo.stars,
+      previewType: result.preview.type,
+      thumbnailPath: result.screenshot.imagePath,
+    }).catch(err => logger.error('Failed to add to history', { err }));
+
     return result;
   });
 
@@ -128,6 +151,8 @@ export function createServer() {
       data: {
         status: 'ok',
         tasks: taskQueue.getStats(),
+        cache: getCacheStats(),
+        performance: perfMonitor.getStats(),
       },
       timestamp: new Date().toISOString(),
     };
@@ -272,6 +297,68 @@ export function createServer() {
     }
   });
 
+  app.get('/api/history', async (req: Request, res: Response, next: NextFunction) => {
+    const { limit = 50, offset = 0, q } = req.query;
+
+    try {
+      let entries;
+      if (q) {
+        entries = await searchHistory(q as string);
+      } else {
+        entries = await getHistory(parseInt(limit as string), parseInt(offset as string));
+      }
+
+      res.json({
+        success: true,
+        data: { entries },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/history/stats', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const stats = await getHistoryStats();
+      res.json({
+        success: true,
+        data: stats,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/history/:id', async (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+
+    try {
+      const removed = await removeFromHistory(id);
+      res.json({
+        success: true,
+        data: { removed },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete('/api/history', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await clearHistory();
+      res.json({
+        success: true,
+        data: { message: 'History cleared' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/preview', async (req: Request, res: Response, next: NextFunction) => {
     const { url, async: isAsync } = req.body;
 
@@ -375,6 +462,10 @@ export function createServer() {
 
   app.get('/favorites', (req: Request, res: Response) => {
     res.sendFile(path.join(process.cwd(), 'public', 'discover.html'));
+  });
+
+  app.get('/history', (req: Request, res: Response) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'history.html'));
   });
 
   app.get('*', (req: Request, res: Response) => {
