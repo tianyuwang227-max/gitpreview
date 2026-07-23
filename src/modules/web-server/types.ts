@@ -12,6 +12,7 @@ export interface ApiResponse<T = any> {
 export interface RepoPreviewRequest {
   url: string;
   async?: boolean;
+  useDocker?: boolean;
 }
 
 export interface RepoPreviewResponse {
@@ -26,6 +27,12 @@ export interface RepoPreviewResponse {
     url: string;
     defaultBranch: string;
     size: number;
+  };
+  preview: {
+    type: 'live' | 'screenshot';
+    imagePath: string;
+    projectType?: string;
+    framework?: string;
   };
   screenshot: {
     imagePath: string;

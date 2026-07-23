@@ -265,6 +265,41 @@
       background: #30363d;
       border-color: #58a6ff;
     }
+
+    .docker-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      color: #8b949e;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .docker-option input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #58a6ff;
+    }
+
+    .preview-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .badge-live {
+      background: #238636;
+      color: white;
+    }
+
+    .badge-screenshot {
+      background: #6e7681;
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -283,6 +318,10 @@
         >
         <button id="previewBtn" onclick="handlePreview()">Preview</button>
       </div>
+      <label class="docker-option">
+        <input type="checkbox" id="useDocker">
+        <span>Use Docker for live preview (experimental)</span>
+      </label>
     </div>
 
     <div class="error" id="error"></div>
@@ -340,6 +379,7 @@
     const loading = document.getElementById('loading');
     const preview = document.getElementById('preview');
     const error = document.getElementById('error');
+    const useDocker = document.getElementById('useDocker');
 
     input.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') handlePreview();
@@ -367,7 +407,7 @@
         const response = await fetch('/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, async: true }),
+          body: JSON.stringify({ url, async: true, useDocker: useDocker.checked }),
         });
 
         const data = await response.json();
@@ -430,8 +470,16 @@
     function showPreview(data) {
       document.getElementById('screenshot').src = data.screenshot.imagePath;
       document.getElementById('repoName').textContent = data.repo.fullName;
+
+      if (data.preview?.type === 'live') {
+        const badge = document.createElement('span');
+        badge.className = 'preview-badge badge-live';
+        badge.textContent = 'Live Preview';
+        document.getElementById('repoName').appendChild(badge);
+      }
+
       document.getElementById('repoDescription').textContent = data.repo.description || 'No description';
-      document.getElementById('repoLanguage').textContent = data.repo.language;
+      document.getElementById('repoLanguage').textContent = data.preview?.framework || data.repo.language;
       document.getElementById('repoStars').textContent = formatNumber(data.repo.stars);
       document.getElementById('repoForks').textContent = formatNumber(data.repo.forks);
       document.getElementById('githubLink').href = data.repo.url;

@@ -6,3 +6,4 @@ data/repos.json
 *.log
 .DS_Store
 coverage/
+.repo-config

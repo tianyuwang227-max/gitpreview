@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { processGithubUrl } from '../github-repo-manager';
 import { captureGitHubRepo } from '../screenshot-service';
+import { runAndCapture } from '../docker-runner';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -18,28 +19,62 @@ export function createServer() {
   app.use('/screenshots', express.static(path.join(config.clone.baseDir, '.screenshots')));
 
   taskQueue.registerHandler('preview', async (task) => {
-    const { url } = task.data;
+    const { url, useDocker = false } = task.data;
     logger.info(`Processing async task ${task.id} for URL: ${url}`);
 
-    taskQueue.updateProgress(task.id, 20);
+    taskQueue.updateProgress(task.id, 10);
 
     const cloneResult = await processGithubUrl(url);
 
-    taskQueue.updateProgress(task.id, 50);
+    taskQueue.updateProgress(task.id, 30);
 
-    const screenshotResult = await captureGitHubRepo(
-      cloneResult.repo.owner,
-      cloneResult.repo.name
-    );
+    let screenshotPath: string;
+    let dockerResult: any = null;
+
+    if (useDocker) {
+      logger.info('Using Docker for live preview');
+      dockerResult = await runAndCapture(
+        cloneResult.localPath,
+        cloneResult.repo.name.toLowerCase()
+      );
+
+      if (dockerResult.success && dockerResult.screenshot) {
+        screenshotPath = dockerResult.screenshot;
+      } else {
+        logger.warn('Docker preview failed, falling back to GitHub screenshot');
+        const screenshotResult = await captureGitHubRepo(
+          cloneResult.repo.owner,
+          cloneResult.repo.name
+        );
+        screenshotPath = screenshotResult.imagePath;
+      }
+    } else {
+      const screenshotResult = await captureGitHubRepo(
+        cloneResult.repo.owner,
+        cloneResult.repo.name
+      );
+      screenshotPath = screenshotResult.imagePath;
+    }
 
     taskQueue.updateProgress(task.id, 90);
 
     return {
       repo: cloneResult.repo,
+      preview: {
+        type: useDocker && dockerResult?.success ? 'live' : 'screenshot',
+        imagePath: `/screenshots/${path.basename(screenshotPath)}`,
+        projectType: dockerResult?.projectType,
+        framework: dockerResult?.framework,
+      },
       screenshot: {
-        imagePath: `/screenshots/${path.basename(screenshotResult.imagePath)}`,
-        url: screenshotResult.url,
-        metadata: screenshotResult.metadata,
+        imagePath: `/screenshots/${path.basename(screenshotPath)}`,
+        url: `https://github.com/${cloneResult.repo.owner}/${cloneResult.repo.name}`,
+        metadata: {
+          width: 1280,
+          height: 900,
+          format: 'png',
+          fileSize: 0,
+        },
       },
     };
   });
