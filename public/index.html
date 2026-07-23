@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitPreview - GitHub Repository Preview</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+      min-height: 100vh;
+      color: #e6edf3;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    h1 {
+      font-size: 3rem;
+      background: linear-gradient(90deg, #58a6ff, #3fb950);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      font-size: 1.2rem;
+    }
+
+    .search-box {
+      background: #21262d;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 40px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .input-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 16px 20px;
+      font-size: 1.1rem;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: #58a6ff;
+    }
+
+    input[type="text"]::placeholder {
+      color: #484f58;
+    }
+
+    button {
+      padding: 16px 32px;
+      font-size: 1.1rem;
+      background: linear-gradient(90deg, #238636, #2ea043);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(35, 134, 54, 0.4);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .preview-container {
+      display: none;
+    }
+
+    .preview-container.active {
+      display: block;
+      animation: fadeIn 0.5s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .repo-card {
+      background: #21262d;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .screenshot-wrapper {
+      position: relative;
+      background: #0d1117;
+      min-height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .screenshot-wrapper img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .repo-info {
+      padding: 24px;
+    }
+
+    .repo-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .repo-name {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #58a6ff;
+    }
+
+    .repo-description {
+      color: #8b949e;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .repo-stats {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #8b949e;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      color: #e6edf3;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      border: 3px solid #30363d;
+      border-top: 3px solid #58a6ff;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error {
+      display: none;
+      background: #f8514922;
+      border: 1px solid #f85149;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      color: #f85149;
+    }
+
+    .error.active {
+      display: block;
+    }
+
+    .btn-github {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+
+    .btn-github:hover {
+      background: #30363d;
+    }
+
+    .examples {
+      margin-top: 40px;
+      text-align: center;
+    }
+
+    .examples h3 {
+      color: #8b949e;
+      margin-bottom: 16px;
+      font-weight: 400;
+    }
+
+    .example-links {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .example-link {
+      padding: 8px 16px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      color: #58a6ff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .example-link:hover {
+      background: #30363d;
+      border-color: #58a6ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>GitPreview</h1>
+      <p class="subtitle">Quick preview of GitHub repositories</p>
+    </header>
+
+    <div class="search-box">
+      <div class="input-group">
+        <input
+          type="text"
+          id="repoUrl"
+          placeholder="Enter GitHub URL (e.g., https://github.com/facebook/react)"
+        >
+        <button id="previewBtn" onclick="handlePreview()">Preview</button>
+      </div>
+    </div>
+
+    <div class="error" id="error"></div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p id="loadingText">Processing repository...</p>
+    </div>
+
+    <div class="preview-container" id="preview">
+      <div class="repo-card">
+        <div class="screenshot-wrapper">
+          <img id="screenshot" src="" alt="Repository preview screenshot">
+        </div>
+        <div class="repo-info">
+          <div class="repo-header">
+            <span class="repo-name" id="repoName"></span>
+            <a class="btn-github" id="githubLink" href="#" target="_blank">
+              View on GitHub
+            </a>
+          </div>
+          <p class="repo-description" id="repoDescription"></p>
+          <div class="repo-stats">
+            <div class="stat">
+              <span>Language:</span>
+              <span class="stat-value" id="repoLanguage"></span>
+            </div>
+            <div class="stat">
+              <span>Stars:</span>
+              <span class="stat-value" id="repoStars"></span>
+            </div>
+            <div class="stat">
+              <span>Forks:</span>
+              <span class="stat-value" id="repoForks"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="examples">
+      <h3>Try these examples:</h3>
+      <div class="example-links">
+        <span class="example-link" onclick="setUrl('https://github.com/facebook/react')">React</span>
+        <span class="example-link" onclick="setUrl('https://github.com/vuejs/vue')">Vue.js</span>
+        <span class="example-link" onclick="setUrl('https://github.com/sveltejs/svelte')">Svelte</span>
+        <span class="example-link" onclick="setUrl('https://github.com/expressjs/express')">Express</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const input = document.getElementById('repoUrl');
+    const btn = document.getElementById('previewBtn');
+    const loading = document.getElementById('loading');
+    const preview = document.getElementById('preview');
+    const error = document.getElementById('error');
+
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handlePreview();
+    });
+
+    function setUrl(url) {
+      input.value = url;
+      handlePreview();
+    }
+
+    async function handlePreview() {
+      const url = input.value.trim();
+
+      if (!url) {
+        showError('Please enter a GitHub URL');
+        return;
+      }
+
+      hideError();
+      hidePreview();
+      showLoading();
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, async: true }),
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error?.message || 'Failed to fetch repository');
+        }
+
+        const { taskId } = data.data;
+        await pollTaskStatus(taskId);
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        hideLoading();
+        btn.disabled = false;
+      }
+    }
+
+    async function pollTaskStatus(taskId) {
+      const maxAttempts = 60;
+      const interval = 2000;
+
+      for (let i = 0; i < maxAttempts; i++) {
+        const response = await fetch(`/api/tasks/${taskId}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error?.message || 'Failed to get task status');
+        }
+
+        const { status, result, error, progress } = data.data;
+
+        if (status === 'completed' && result) {
+          showPreview(result);
+          return;
+        }
+
+        if (status === 'failed') {
+          throw new Error(error || 'Task failed');
+        }
+
+        if (progress !== undefined) {
+          updateProgress(progress);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, interval));
+      }
+
+      throw new Error('Timeout waiting for preview');
+    }
+
+    function showLoading() {
+      loading.classList.add('active');
+    }
+
+    function hideLoading() {
+      loading.classList.remove('active');
+    }
+
+    function showPreview(data) {
+      document.getElementById('screenshot').src = data.screenshot.imagePath;
+      document.getElementById('repoName').textContent = data.repo.fullName;
+      document.getElementById('repoDescription').textContent = data.repo.description || 'No description';
+      document.getElementById('repoLanguage').textContent = data.repo.language;
+      document.getElementById('repoStars').textContent = formatNumber(data.repo.stars);
+      document.getElementById('repoForks').textContent = formatNumber(data.repo.forks);
+      document.getElementById('githubLink').href = data.repo.url;
+      preview.classList.add('active');
+    }
+
+    function updateProgress(progress) {
+      const loadingText = document.getElementById('loadingText');
+      if (progress < 20) {
+        loadingText.textContent = 'Validating URL...';
+      } else if (progress < 50) {
+        loadingText.textContent = 'Fetching repository information...';
+      } else if (progress < 90) {
+        loadingText.textContent = 'Capturing repository screenshot...';
+      } else {
+        loadingText.textContent = 'Finalizing...';
+      }
+    }
+
+    function hidePreview() {
+      preview.classList.remove('active');
+    }
+
+    function showError(message) {
+      error.textContent = message;
+      error.classList.add('active');
+    }
+
+    function hideError() {
+      error.classList.remove('active');
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'k';
+      }
+      return num.toString();
+    }
+  </script>
+</body>
+</html>
