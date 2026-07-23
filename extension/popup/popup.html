@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #161b22, #0d1117);
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(90deg, #58a6ff, #3fb950);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #8b949e;
+      font-size: 12px;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #3fb950;
+    }
+
+    .status-dot.offline {
+      background: #f85149;
+    }
+
+    .status-text {
+      font-size: 14px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 6px;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-size: 14px;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #238636, #2ea043);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, #2ea043, #3fb950);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .features {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #30363d;
+    }
+
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 13px;
+      color: #8b949e;
+    }
+
+    .feature-icon {
+      font-size: 16px;
+    }
+
+    .footer {
+      padding: 12px 20px;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      text-align: center;
+      font-size: 11px;
+      color: #484f58;
+    }
+
+    .footer a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .message.success {
+      background: #23863633;
+      border: 1px solid #238636;
+      color: #3fb950;
+    }
+
+    .message.error {
+      background: #f8514933;
+      border: 1px solid #f85149;
+      color: #f85149;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">GitPreview</div>
+    <div class="subtitle">Preview GitHub repositories instantly</div>
+  </div>
+
+  <div class="content">
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <div class="status-text" id="statusText">Checking connection...</div>
+    </div>
+
+    <div id="message" class="message" style="display: none;"></div>
+
+    <div class="input-group">
+      <label>Server URL</label>
+      <input type="text" id="serverUrl" value="http://localhost:3000" placeholder="http://localhost:3000">
+    </div>
+
+    <button class="btn" id="saveBtn">Save Settings</button>
+
+    <div class="features">
+      <div class="feature">
+        <span class="feature-icon">&#128270;</span>
+        <span>Preview button on GitHub pages</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">&#128247;</span>
+        <span>Automatic repository screenshots</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">&#128202;</span>
+        <span>Repository analysis & tech stack</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">&#9889;</span>
+        <span>Live preview with Docker</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <a href="https://github.com/tianyuwang227-max/gitpreview" target="_blank">GitHub</a>
+    &nbsp;|&nbsp; v1.0.0
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
