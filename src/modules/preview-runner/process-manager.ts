@@ -1,19 +1,39 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
+import treeKill from 'tree-kill';
 import { PreviewInstance, ProjectConfig } from './types';
 import { allocatePort, releasePort, waitForPort } from './port-manager';
 import { logger } from '../../utils/logger';
+import {
+  sanitizeEnvironment,
+  sanitizeCommand,
+  parseCommand,
+  validateScriptName,
+  SECURITY_CONFIG,
+} from '../../utils/security';
 
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ChildProcess> = new Map();
   private instances: Map<string, PreviewInstance> = new Map();
   private timers: Map<string, NodeJS.Timeout> = new Map();
 
+  getRunningCount(): number {
+    return Array.from(this.instances.values()).filter(i => i.status === 'running').length;
+  }
+
+  canStartNew(): boolean {
+    return this.getRunningCount() < SECURITY_CONFIG.maxConcurrentPreviews;
+  }
+
   async startPreview(
     id: string,
     repoPath: string,
     config: ProjectConfig
   ): Promise<PreviewInstance> {
+    if (!this.canStartNew()) {
+      throw new Error(`Maximum concurrent previews reached (${SECURITY_CONFIG.maxConcurrentPreviews})`);
+    }
+
     logger.info(`Starting preview for ${id}`);
 
     const port = await allocatePort(config.port);
@@ -28,8 +48,8 @@ export class ProcessManager extends EventEmitter {
       pid: null,
       startedAt: new Date(),
       lastAccessedAt: new Date(),
-      timeout: 300000,
-      idleTimeout: 600000,
+      timeout: SECURITY_CONFIG.maxTimeoutMs,
+      idleTimeout: SECURITY_CONFIG.maxIdleMs,
       config,
       logs: [],
     };
@@ -38,16 +58,26 @@ export class ProcessManager extends EventEmitter {
 
     try {
       if (config.installCommand) {
+        if (!validateScriptName('install')) {
+          throw new Error('Install command is not allowed');
+        }
         await this.runCommand(id, repoPath, config.installCommand, 120000);
       }
 
       if (config.buildCommand) {
+        if (!validateScriptName('build')) {
+          throw new Error('Build command is not allowed');
+        }
         await this.runCommand(id, repoPath, config.buildCommand, 120000);
       }
 
-      const process = this.spawnProcess(id, repoPath, config.startCommand, port);
-
-      instance.pid = process.pid || null;
+      if (config.startCommand) {
+        if (!validateScriptName('start')) {
+          throw new Error('Start command is not allowed');
+        }
+        const childProcess = this.spawnProcess(id, repoPath, config.startCommand, port);
+        instance.pid = childProcess.pid || null;
+      }
 
       const portReady = await waitForPort(port, 60000);
       if (!portReady) {
@@ -63,7 +93,7 @@ export class ProcessManager extends EventEmitter {
       return instance;
     } catch (error) {
       instance.status = 'failed';
-      this.cleanup(id);
+      await this.cleanup(id);
       throw error;
     }
   }
@@ -72,27 +102,28 @@ export class ProcessManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       logger.info(`Running command for ${id}: ${command}`);
 
-      const [cmd, ...args] = command.split(' ');
+      const sanitizedCommand = sanitizeCommand(command);
+      const { cmd, args } = parseCommand(sanitizedCommand);
+
       const childProcess = spawn(cmd, args, {
         cwd,
-        shell: true,
+        shell: false,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env, NODE_ENV: 'development' },
+        env: sanitizeEnvironment(process.env),
+        detached: false,
       });
 
       const timer = setTimeout(() => {
-        childProcess.kill('SIGTERM');
+        this.killProcessTree(childProcess);
         reject(new Error(`Command timed out: ${command}`));
       }, timeout);
 
       childProcess.stdout?.on('data', (data: Buffer) => {
-        const log = data.toString();
-        this.addLog(id, log);
+        this.addLog(id, data.toString());
       });
 
       childProcess.stderr?.on('data', (data: Buffer) => {
-        const log = data.toString();
-        this.addLog(id, log);
+        this.addLog(id, data.toString());
       });
 
       childProcess.on('close', (code: number | null) => {
@@ -112,18 +143,20 @@ export class ProcessManager extends EventEmitter {
   }
 
   private spawnProcess(id: string, cwd: string, command: string, port: number): ChildProcess {
-    const [cmd, ...args] = command.split(' ');
+    const sanitizedCommand = sanitizeCommand(command);
+    const { cmd, args } = parseCommand(sanitizedCommand);
 
     const childProcess = spawn(cmd, args, {
       cwd,
-      shell: true,
+      shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
-        ...process.env,
+        ...sanitizeEnvironment(process.env),
         PORT: port.toString(),
-        NODE_ENV: 'development',
       },
       detached: false,
+      uid: undefined,
+      gid: undefined,
     });
 
     this.processes.set(id, childProcess);
@@ -161,6 +194,30 @@ export class ProcessManager extends EventEmitter {
     return childProcess;
   }
 
+  private killProcessTree(process: ChildProcess): void {
+    if (process.pid) {
+      try {
+        treeKill(process.pid, 'SIGTERM', (err) => {
+          if (err) {
+            logger.warn(`Failed to kill process tree ${process.pid}: ${err}`);
+            try {
+              process.kill('SIGKILL');
+            } catch (killErr) {
+              logger.error(`Failed to force kill process ${process.pid}: ${killErr}`);
+            }
+          }
+        });
+      } catch (error) {
+        logger.error(`Error killing process tree: ${error}`);
+        try {
+          process.kill('SIGKILL');
+        } catch (killErr) {
+          // Process already dead
+        }
+      }
+    }
+  }
+
   private addLog(id: string, log: string): void {
     const instance = this.instances.get(id);
     if (instance) {
@@ -177,6 +234,10 @@ export class ProcessManager extends EventEmitter {
     if (instance) {
       instance.lastAccessedAt = new Date();
     }
+  }
+
+  touchPreview(id: string): void {
+    this.touchInstance(id);
   }
 
   private startIdleTimer(id: string): void {
@@ -198,29 +259,32 @@ export class ProcessManager extends EventEmitter {
 
   async stopPreview(id: string): Promise<void> {
     logger.info(`Stopping preview ${id}`);
-    this.cleanup(id);
+    await this.cleanup(id);
   }
 
-  private cleanup(id: string): void {
+  private async cleanup(id: string): Promise<void> {
     const timer = this.timers.get(id);
     if (timer) {
       clearInterval(timer);
       this.timers.delete(id);
     }
 
-    const process = this.processes.get(id);
-    if (process && !process.killed) {
-      try {
-        process.kill('SIGTERM');
+    const childProcess = this.processes.get(id);
+    if (childProcess && !childProcess.killed) {
+      this.killProcessTree(childProcess);
 
+      await new Promise<void>((resolve) => {
         setTimeout(() => {
-          if (process && !process.killed) {
-            process.kill('SIGKILL');
+          if (childProcess && !childProcess.killed) {
+            try {
+              childProcess.kill('SIGKILL');
+            } catch (error) {
+              // Process already dead
+            }
           }
+          resolve();
         }, 5000);
-      } catch (error) {
-        logger.error(`Failed to kill process ${id}: ${error}`);
-      }
+      });
     }
     this.processes.delete(id);
 

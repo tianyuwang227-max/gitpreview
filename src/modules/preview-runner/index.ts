@@ -8,6 +8,7 @@ import { fetchRepoInfo } from '../github-repo-manager/fetcher';
 import { cloneRepo } from '../github-repo-manager/cloner';
 import { repoStorage } from '../github-repo-manager/storage';
 import { logger } from '../../utils/logger';
+import { SECURITY_CONFIG } from '../../utils/security';
 
 export { processManager } from './process-manager';
 export { detectProjectConfig } from './detector';
@@ -21,8 +22,15 @@ export type {
 } from './types';
 
 export async function createPreview(url: string): Promise<PreviewResult> {
-  const previewId = uuidv4();
+  if (!processManager.canStartNew()) {
+    return {
+      success: false,
+      error: `Maximum concurrent previews reached (${SECURITY_CONFIG.maxConcurrentPreviews}). Please try again later.`,
+      phase: 'limit',
+    };
+  }
 
+  const previewId = uuidv4();
   logger.info(`Creating preview ${previewId} for ${url}`);
 
   try {
@@ -85,7 +93,11 @@ export async function stopPreview(id: string): Promise<void> {
 }
 
 export function getPreview(id: string): PreviewInstance | undefined {
-  return processManager.getInstance(id);
+  const instance = processManager.getInstance(id);
+  if (instance) {
+    processManager.touchPreview(id);
+  }
+  return instance;
 }
 
 export function getAllPreviews(): PreviewInstance[] {
