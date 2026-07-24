@@ -38,6 +38,8 @@ import {
   governanceManager,
 } from '../governance';
 import { getHealthStatus } from '../../utils/health';
+import { requestLogger } from '../../utils/request-logger';
+import { register } from '../../utils/metrics';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -51,6 +53,7 @@ export function createServer() {
 
   app.use(cors());
   app.use(express.json());
+  app.use(requestLogger);
   app.use(express.static(path.join(process.cwd(), 'public')));
   app.use('/screenshots', express.static(path.join(config.clone.baseDir, '.screenshots')));
 
@@ -224,6 +227,15 @@ export function createServer() {
       });
     } catch (error) {
       next(error);
+    }
+  });
+
+  app.get('/metrics', async (req: Request, res: Response) => {
+    try {
+      res.set('Content-Type', register.contentType);
+      res.end(await register.metrics());
+    } catch (error) {
+      res.status(500).end();
     }
   });
 
