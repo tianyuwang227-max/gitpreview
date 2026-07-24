@@ -3,7 +3,7 @@
 
   let API_BASE = 'http://localhost:3000';
   let ws = null;
-  let currentTaskId = null;
+  let currentPreviewId = null;
 
   function isRepoPage() {
     const path = window.location.pathname;
@@ -41,7 +41,14 @@
     panel.innerHTML = `
       <div class="gitpreview-header">
         <h3>GitPreview</h3>
-        <button class="gitpreview-close">&times;</button>
+        <div class="gitpreview-header-actions">
+          <select id="gitpreview-mode" class="gitpreview-select">
+            <option value="auto">Auto</option>
+            <option value="screenshot">Screenshot</option>
+            <option value="live">Live Preview</option>
+          </select>
+          <button class="gitpreview-close">&times;</button>
+        </div>
       </div>
       <div class="gitpreview-content">
         <div class="gitpreview-loading">
@@ -55,8 +62,13 @@
           </div>
         </div>
         <div class="gitpreview-result" style="display: none;">
-          <div class="gitpreview-screenshot">
-            <img src="" alt="Repository preview">
+          <div class="gitpreview-preview-wrapper">
+            <div class="gitpreview-screenshot" style="display: none;">
+              <img src="" alt="Repository preview">
+            </div>
+            <div class="gitpreview-iframe-wrapper" style="display: none;">
+              <iframe src="" frameborder="0"></iframe>
+            </div>
           </div>
           <div class="gitpreview-info">
             <div class="gitpreview-repo-name"></div>
@@ -66,6 +78,7 @@
           </div>
           <div class="gitpreview-actions">
             <a href="#" class="gitpreview-full-link" target="_blank">Open Full Preview</a>
+            <button class="gitpreview-stop-btn" style="display: none;">Stop Preview</button>
           </div>
         </div>
         <div class="gitpreview-error" style="display: none;">
@@ -111,7 +124,7 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 800px;
+        width: 900px;
         max-width: 90vw;
         max-height: 90vh;
         background: #0d1117;
@@ -120,6 +133,8 @@
         box-shadow: 0 16px 70px rgba(0, 0, 0, 0.5);
         z-index: 10000;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
       }
 
       .gitpreview-header {
@@ -129,12 +144,28 @@
         padding: 16px 20px;
         background: #161b22;
         border-bottom: 1px solid #30363d;
+        flex-shrink: 0;
       }
 
       .gitpreview-header h3 {
         margin: 0;
         font-size: 16px;
         color: #e6edf3;
+      }
+
+      .gitpreview-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .gitpreview-select {
+        padding: 4px 8px;
+        background: #0d1117;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        color: #e6edf3;
+        font-size: 12px;
       }
 
       .gitpreview-close {
@@ -154,7 +185,7 @@
       .gitpreview-content {
         padding: 20px;
         overflow-y: auto;
-        max-height: calc(90vh - 60px);
+        flex: 1;
       }
 
       .gitpreview-loading {
@@ -211,7 +242,7 @@
         text-align: center;
       }
 
-      .gitpreview-screenshot {
+      .gitpreview-preview-wrapper {
         margin-bottom: 20px;
         border-radius: 8px;
         overflow: hidden;
@@ -222,6 +253,18 @@
         width: 100%;
         height: auto;
         display: block;
+      }
+
+      .gitpreview-iframe-wrapper {
+        position: relative;
+        width: 100%;
+        height: 500px;
+      }
+
+      .gitpreview-iframe-wrapper iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
       }
 
       .gitpreview-repo-name {
@@ -299,6 +342,21 @@
         background: #2ea043;
       }
 
+      .gitpreview-stop-btn {
+        padding: 8px 16px;
+        background: #f8514922;
+        color: #f85149;
+        border: 1px solid #f85149;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .gitpreview-stop-btn:hover {
+        background: #f8514944;
+      }
+
       .gitpreview-error {
         text-align: center;
         padding: 40px;
@@ -314,14 +372,31 @@
         background: rgba(0, 0, 0, 0.5);
         z-index: 9999;
       }
+
+      .gitpreview-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        margin-left: 8px;
+      }
+
+      .gitpreview-badge-live {
+        background: #238636;
+        color: #fff;
+      }
+
+      .gitpreview-badge-screenshot {
+        background: #6e7681;
+        color: #fff;
+      }
     `;
     document.head.appendChild(style);
   }
 
-  function connectWebSocket(panel) {
-    const protocol = API_BASE.startsWith('https') ? 'wss:' : 'ws:';
+  function connectWebSocket() {
     const wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws';
-
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -331,7 +406,7 @@
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-        handleWebSocketMessage(message, panel);
+        handleWebSocketMessage(message);
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error);
       }
@@ -347,67 +422,53 @@
     };
   }
 
-  function handleWebSocketMessage(message, panel) {
-    switch (message.type) {
-      case 'connected':
-        console.log('GitPreview WebSocket client ID:', message.data?.clientId);
-        break;
+  function handleWebSocketMessage(message) {
+    const panel = document.querySelector('.gitpreview-panel');
+    if (!panel) return;
 
+    switch (message.type) {
       case 'progress':
-        if (message.taskId === currentTaskId) {
+        if (message.taskId === currentPreviewId) {
           updateProgressUI(panel, message.progress, message.message);
         }
         break;
 
       case 'completed':
-        if (message.taskId === currentTaskId) {
-          showPreview(panel, message.data);
-          currentTaskId = null;
+        if (message.taskId === currentPreviewId) {
+          showScreenshotPreview(panel, message.data);
         }
         break;
 
       case 'error':
-        if (message.taskId === currentTaskId) {
+        if (message.taskId === currentPreviewId) {
           showError(panel, message.message);
-          currentTaskId = null;
         }
         break;
     }
   }
 
-  function subscribeToTask(taskId, panel) {
-    currentTaskId = taskId;
+  function subscribeToTask(taskId) {
+    currentPreviewId = taskId;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'subscribe', taskId }));
-    } else {
-      connectWebSocket(panel);
-      setTimeout(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'subscribe', taskId }));
-        }
-      }, 1000);
     }
   }
 
   function updateProgressUI(panel, progress, message) {
-    const loading = panel.querySelector('.gitpreview-loading');
-    const progressFill = loading.querySelector('.gitpreview-progress-fill');
-    const progressText = loading.querySelector('.gitpreview-progress-text');
-    const loadingText = loading.querySelector('.gitpreview-loading-text');
+    const progressFill = panel.querySelector('.gitpreview-progress-fill');
+    const progressText = panel.querySelector('.gitpreview-progress-text');
+    const loadingText = panel.querySelector('.gitpreview-loading-text');
 
-    progressFill.style.width = `${progress}%`;
-    progressText.textContent = `${progress}%`;
-
-    if (message) {
-      loadingText.textContent = message;
-    }
+    if (progressFill) progressFill.style.width = `${progress}%`;
+    if (progressText) progressText.textContent = `${progress}%`;
+    if (loadingText && message) loadingText.textContent = message;
   }
 
-  async function fetchPreview(repoInfo) {
+  async function fetchPreview(repoInfo, mode) {
     const response = await fetch(`${API_BASE}/api/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: repoInfo.url, async: true })
+      body: JSON.stringify({ url: repoInfo.url, mode }),
     });
 
     if (!response.ok) {
@@ -419,82 +480,65 @@
       throw new Error(data.error?.message || 'Preview failed');
     }
 
-    return data.data.taskId;
+    return data.data;
   }
 
-  async function pollTaskStatus(taskId, panel, maxAttempts = 60) {
-    for (let i = 0; i < maxAttempts; i++) {
-      const response = await fetch(`${API_BASE}/api/tasks/${taskId}`);
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error?.message || 'Failed to get status');
-      }
-
-      const { status, result, error, progress } = data.data;
-
-      if (status === 'completed' && result) {
-        return result;
-      }
-
-      if (status === 'failed') {
-        throw new Error(error || 'Preview failed');
-      }
-
-      if (progress !== undefined) {
-        updateProgressUI(panel, progress, null);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    throw new Error('Timeout waiting for preview');
-  }
-
-  function showPreview(panel, data) {
-    const result = panel.querySelector('.gitpreview-result');
+  function showScreenshotPreview(panel, data) {
     const loading = panel.querySelector('.gitpreview-loading');
+    const result = panel.querySelector('.gitpreview-result');
+    const screenshot = panel.querySelector('.gitpreview-screenshot');
+    const iframe = panel.querySelector('.gitpreview-iframe-wrapper');
 
-    const screenshot = result.querySelector('.gitpreview-screenshot img');
-    screenshot.src = `${API_BASE}${data.screenshot.imagePath}`;
+    if (data.mode === 'live' && data.url) {
+      screenshot.style.display = 'none';
+      iframe.style.display = 'block';
+      iframe.querySelector('iframe').src = `${API_BASE}${data.url}`;
 
-    result.querySelector('.gitpreview-repo-name').textContent = data.repo.fullName;
-    result.querySelector('.gitpreview-description').textContent = data.repo.description || 'No description';
-
-    const stats = result.querySelector('.gitpreview-stats');
-    stats.innerHTML = `
-      <span class="gitpreview-stat">
-        <span>&#9733;</span>
-        <span class="gitpreview-stat-value">${formatNumber(data.repo.stars)}</span>
-      </span>
-      <span class="gitpreview-stat">
-        <span>&#9741;</span>
-        <span class="gitpreview-stat-value">${formatNumber(data.repo.forks)}</span>
-      </span>
-      <span class="gitpreview-stat">
-        <span>&#128196;</span>
-        <span class="gitpreview-stat-value">${data.repo.language}</span>
-      </span>
-    `;
-
-    const techStack = result.querySelector('.gitpreview-tech-stack');
-    if (data.analysis?.techStack) {
-      const tags = [];
-      if (data.analysis.techStack.languages) {
-        data.analysis.techStack.languages.forEach(lang => {
-          tags.push(`<span class="gitpreview-tech-tag language">${lang.name}</span>`);
-        });
-      }
-      if (data.analysis.techStack.frameworks) {
-        data.analysis.techStack.frameworks.forEach(fw => {
-          tags.push(`<span class="gitpreview-tech-tag">${fw}</span>`);
-        });
-      }
-      techStack.innerHTML = tags.join('');
+      const stopBtn = panel.querySelector('.gitpreview-stop-btn');
+      stopBtn.style.display = 'inline-block';
+      stopBtn.onclick = () => stopPreview(data.id);
+    } else {
+      screenshot.style.display = 'block';
+      iframe.style.display = 'none';
+      screenshot.querySelector('img').src = `${API_BASE}${data.screenshot?.imagePath || data.preview?.imagePath}`;
     }
 
-    const fullLink = result.querySelector('.gitpreview-full-link');
-    fullLink.href = `${API_BASE}/?url=${encodeURIComponent(data.repo.url)}`;
+    const repoName = panel.querySelector('.gitpreview-repo-name');
+    repoName.textContent = data.repo?.fullName || 'Repository';
+
+    if (data.mode === 'live') {
+      const badge = document.createElement('span');
+      badge.className = 'gitpreview-badge gitpreview-badge-live';
+      badge.textContent = 'LIVE';
+      repoName.appendChild(badge);
+    }
+
+    panel.querySelector('.gitpreview-description').textContent = data.repo?.description || 'No description';
+
+    const stats = panel.querySelector('.gitpreview-stats');
+    if (data.repo) {
+      stats.innerHTML = `
+        <span class="gitpreview-stat">
+          <span>&#9733;</span>
+          <span class="gitpreview-stat-value">${formatNumber(data.repo.stars)}</span>
+        </span>
+        <span class="gitpreview-stat">
+          <span>&#9741;</span>
+          <span class="gitpreview-stat-value">${formatNumber(data.repo.forks)}</span>
+        </span>
+        <span class="gitpreview-stat">
+          <span>&#128196;</span>
+          <span class="gitpreview-stat-value">${data.repo.language}</span>
+        </span>
+      `;
+    }
+
+    const fullLink = panel.querySelector('.gitpreview-full-link');
+    if (data.mode === 'live' && data.url) {
+      fullLink.href = `${API_BASE}${data.url}`;
+    } else if (data.repo) {
+      fullLink.href = `${API_BASE}/?url=${encodeURIComponent(data.repo.url)}`;
+    }
 
     loading.style.display = 'none';
     result.style.display = 'block';
@@ -516,6 +560,15 @@
     return num?.toString() || '0';
   }
 
+  async function stopPreview(id) {
+    try {
+      await fetch(`${API_BASE}/api/live-preview/${id}/stop`, { method: 'POST' });
+      currentPreviewId = null;
+    } catch (error) {
+      console.error('Failed to stop preview:', error);
+    }
+  }
+
   async function handlePreviewClick() {
     const repoInfo = getRepoInfo();
 
@@ -530,31 +583,38 @@
     closeBtn.addEventListener('click', () => {
       panel.remove();
       overlay.remove();
-      if (ws) {
-        ws.close();
-        ws = null;
+      if (currentPreviewId) {
+        stopPreview(currentPreviewId);
       }
-      currentTaskId = null;
     });
 
     overlay.addEventListener('click', () => {
       panel.remove();
       overlay.remove();
-      if (ws) {
-        ws.close();
-        ws = null;
+      if (currentPreviewId) {
+        stopPreview(currentPreviewId);
       }
-      currentTaskId = null;
     });
 
     try {
-      connectWebSocket(panel);
+      connectWebSocket();
 
-      const taskId = await fetchPreview(repoInfo);
-      subscribeToTask(taskId, panel);
+      const modeSelect = panel.querySelector('#gitpreview-mode');
+      const mode = modeSelect.value;
 
-      const result = await pollTaskStatus(taskId, panel);
-      showPreview(panel, result);
+      const result = await fetchPreview(repoInfo, mode);
+
+      if (result.mode === 'live' && result.id) {
+        currentPreviewId = result.id;
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          subscribeToTask(result.id);
+        }
+
+        showScreenshotPreview(panel, result);
+      } else {
+        showScreenshotPreview(panel, result);
+      }
     } catch (error) {
       showError(panel, error.message);
     }

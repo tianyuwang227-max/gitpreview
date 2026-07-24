@@ -12,6 +12,7 @@ Preview GitHub repositories instantly - both screenshots and live running previe
 - **Real-time Progress** - WebSocket-based progress updates
 - **Security** - Sandboxed execution, rate limiting, resource quotas
 - **Governance** - Disk monitoring, auto-cleanup, access stats
+- **Monitoring** - Prometheus metrics, structured logging
 
 ## Quick Start
 
@@ -32,9 +33,16 @@ npm start
 
 Open http://localhost:3000
 
-## API
+## Usage
 
-### Preview
+### Web UI
+
+1. Open http://localhost:3000
+2. Enter GitHub URL (e.g., `https://github.com/vitejs/vite`)
+3. Select mode: Auto / Screenshot / Live Preview
+4. Click "Preview"
+
+### API
 
 ```bash
 # Screenshot mode
@@ -53,18 +61,29 @@ curl -X POST http://localhost:3000/api/preview \
   -d '{"url": "https://github.com/vitejs/vite", "mode": "auto"}'
 ```
 
-### Governance
+### Browser Extension
 
-```bash
-# Get system status
-curl http://localhost:3000/api/governance
+1. Open `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select the `extension` folder
 
-# Get alerts
-curl http://localhost:3000/api/governance/alerts
+## API Endpoints
 
-# Manual cleanup
-curl -X POST http://localhost:3000/api/governance/cleanup
-```
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/preview` | POST | Create preview |
+| `/api/health` | GET | Health check |
+| `/api/governance` | GET | Governance status |
+| `/api/governance/alerts` | GET | Get alerts |
+| `/api/governance/cleanup` | POST | Manual cleanup |
+| `/api/discovery` | GET | Discovery data |
+| `/api/search?q=xxx` | GET | Search projects |
+| `/api/trending` | GET | Trending projects |
+| `/api/categories` | GET | Categories |
+| `/api/favorites` | GET/POST | Favorites |
+| `/api/history` | GET | Browsing history |
+| `/metrics` | GET | Prometheus metrics |
 
 ## Modules
 
@@ -89,13 +108,43 @@ curl -X POST http://localhost:3000/api/governance/cleanup
 - Concurrent preview limits
 - Rate limiting per IP
 
+## Monitoring
+
+### Prometheus Metrics
+
+```bash
+curl http://localhost:3000/metrics
+```
+
+Available metrics:
+- `http_request_duration_seconds` - Request duration
+- `http_requests_total` - Total requests
+- `preview_created_total` - Previews created
+- `active_previews` - Active previews
+- `ws_connections` - WebSocket connections
+- `disk_usage_bytes` - Disk usage
+- `task_queue_size` - Task queue size
+
+### Health Check
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Returns:
+- Status (healthy/degraded/unhealthy)
+- Disk usage
+- Memory usage
+- Process count
+- Task queue stats
+
 ## Deployment
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
 **Recommended:** VPS with Node.js 18+
 
-**Not supported:** Vercel, Netlify, Lambda (no long-running processes)
+**Not supported:** Vercel, Netlify, Lambda
 
 ## Testing
 
@@ -108,6 +157,29 @@ npm test -- --coverage
 
 # Run specific suite
 npm test -- --testPathPattern=governance
+```
+
+## Project Structure
+
+```
+gitpreview/
+├── src/
+│   ├── modules/
+│   │   ├── github-repo-manager/
+│   │   ├── screenshot-service/
+│   │   ├── preview-runner/
+│   │   ├── repo-analyzer/
+│   │   ├── discovery/
+│   │   ├── history/
+│   │   ├── governance/
+│   │   ├── websocket/
+│   │   └── web-server/
+│   ├── config/
+│   └── utils/
+├── public/
+├── extension/
+├── tests/
+└── docs/
 ```
 
 ## License
