@@ -51,6 +51,30 @@ export async function cloneRepo(repo: RepoInfo, shallow: boolean = true): Promis
   }
 }
 
+export async function checkoutRef(localPath: string, ref: string): Promise<void> {
+  logger.info(`Checking out ref ${ref} in ${localPath}`);
+
+  const git: SimpleGit = simpleGit(localPath, {
+    timeout: {
+      block: config.clone.timeout,
+    },
+  });
+
+  try {
+    try {
+      await git.fetch('origin', ref);
+    } catch {
+      logger.debug(`Fetch failed for ref ${ref}, might be a commit SHA`);
+    }
+
+    await git.checkout(ref);
+    logger.info(`Successfully checked out ref ${ref}`);
+  } catch (error) {
+    logger.error(`Failed to checkout ref ${ref}`, { error });
+    throw new Error(`Checkout failed for ref "${ref}": ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
 async function checkDirectoryExists(path: string): Promise<boolean> {
   try {
     await fs.access(path);

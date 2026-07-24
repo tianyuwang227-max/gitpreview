@@ -29,6 +29,7 @@ export interface PreviewResult {
   instance?: PreviewInstance;
   error?: string;
   phase?: string;
+  ref?: string;
 }
 
 export interface CleanupResult {

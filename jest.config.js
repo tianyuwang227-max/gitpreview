@@ -7,6 +7,6 @@ module.exports = {
     '^.+\\.ts$': 'ts-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(rate-limiter-flexible)/)',
+    'node_modules/(?!(uuid|rate-limiter-flexible)/)',
   ],
 };

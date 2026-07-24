@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import { processGithubUrl } from '../github-repo-manager';
 import { captureGitHubRepo } from '../screenshot-service';
 import {
@@ -20,12 +21,49 @@ import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
 import { ApiResponse } from './types';
 
+const previewProxies = new Map<string, any>();
+
+function getOrCreateProxy(id: string, targetUrl: string): any {
+  if (!previewProxies.has(id)) {
+    const proxy = createProxyMiddleware({
+      target: targetUrl,
+      changeOrigin: true,
+      ws: true,
+    });
+    previewProxies.set(id, proxy);
+  }
+  return previewProxies.get(id);
+}
+
+export function removeProxy(id: string): void {
+  previewProxies.delete(id);
+}
+
 export function createServer() {
   const app = express();
 
   app.use(express.json());
   app.use(express.static(path.join(process.cwd(), 'public')));
   app.use('/screenshots', express.static(path.join(config.clone.baseDir, '.screenshots')));
+
+  app.use('/preview/:id', (req: Request, res: Response, next: NextFunction) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const instance = getPreview(id);
+
+    if (!instance || instance.status !== 'running') {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PREVIEW_NOT_RUNNING',
+          message: 'Preview not found or not running',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const proxy = getOrCreateProxy(id, instance.url);
+    proxy(req, res, next);
+  });
 
   app.get('/api/health', async (req: Request, res: Response) => {
     const health = await getHealthStatus();

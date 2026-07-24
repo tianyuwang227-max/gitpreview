@@ -1,14 +1,15 @@
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { processManager } from './process-manager';
 import { detectProjectConfig } from './detector';
 import { PreviewInstance, PreviewResult, CleanupResult } from './types';
 import { fetchRepoInfo } from '../github-repo-manager/fetcher';
-import { cloneRepo } from '../github-repo-manager/cloner';
+import { cloneRepo, checkoutRef } from '../github-repo-manager/cloner';
 import { repoStorage } from '../github-repo-manager/storage';
 import { isRepoTrusted, getTrustedRepo } from '../trusted-repos';
 import { validateGithubUrl } from '../github-repo-manager/validator';
 import { logger } from '../../utils/logger';
 import { config } from '../../config';
+import { removeProxy } from '../web-server/server';
 
 export { processManager } from './process-manager';
 export { detectProjectConfig } from './detector';
@@ -49,7 +50,7 @@ export async function createPreview(url: string): Promise<PreviewResult> {
     };
   }
 
-  const previewId = uuidv4();
+  const previewId = randomUUID();
   logger.info(`Creating preview ${previewId} for ${owner}/${repo}`);
 
   try {
@@ -58,6 +59,23 @@ export async function createPreview(url: string): Promise<PreviewResult> {
     logger.info(`Cloning repository: ${owner}/${repo}`);
     const cloneResult = await cloneRepo(repoInfo);
     const localPath = cloneResult.localPath;
+
+    const trustedRepo = await getTrustedRepo(owner, repo);
+    let actualRef = repoInfo.defaultBranch;
+
+    if (trustedRepo?.ref) {
+      logger.info(`Checking out configured ref: ${trustedRepo.ref}`);
+      try {
+        await checkoutRef(localPath, trustedRepo.ref);
+        actualRef = trustedRepo.ref;
+      } catch (error) {
+        return {
+          success: false,
+          error: `Failed to checkout ref "${trustedRepo.ref}": ${error instanceof Error ? error.message : 'Unknown error'}`,
+          phase: 'checkout',
+        };
+      }
+    }
 
     await repoStorage.save({
       url,
@@ -71,7 +89,6 @@ export async function createPreview(url: string): Promise<PreviewResult> {
     logger.info(`Detecting project config: ${localPath}`);
     const projectConfig = await detectProjectConfig(localPath);
 
-    const trustedRepo = await getTrustedRepo(owner, repo);
     if (trustedRepo) {
       if (trustedRepo.allowScripts) {
         projectConfig.allowScripts = true;
@@ -98,9 +115,16 @@ export async function createPreview(url: string): Promise<PreviewResult> {
 
     instance.repoFullName = `${owner}/${repo}`;
 
+    processManager.on('stopped', (stoppedId: string) => {
+      if (stoppedId === previewId) {
+        removeProxy(previewId);
+      }
+    });
+
     return {
       success: true,
       instance,
+      ref: actualRef,
     };
   } catch (error) {
     logger.error(`Preview creation failed: ${error}`);
@@ -114,6 +138,7 @@ export async function createPreview(url: string): Promise<PreviewResult> {
 
 export async function stopPreview(id: string): Promise<void> {
   await processManager.stopPreview(id);
+  removeProxy(id);
 }
 
 export function getPreview(id: string): PreviewInstance | undefined {
@@ -143,6 +168,7 @@ export async function cleanupOldPreviews(maxAge: number = 3600000): Promise<Clea
     if (age > maxAge) {
       try {
         await processManager.stopPreview(instance.id);
+        removeProxy(instance.id);
         result.stopped.push(instance.id);
       } catch (error) {
         result.errors.push(`${instance.id}: ${error}`);
