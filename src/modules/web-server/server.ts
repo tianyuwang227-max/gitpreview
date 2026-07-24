@@ -680,12 +680,60 @@ export function createServer() {
   });
 
   app.use((error: Error, req: Request, res: Response, _next: NextFunction) => {
-    logger.error('Request error', { error, path: req.path });
+    const requestId = Math.random().toString(36).substring(7);
+
+    logger.error('Request error', {
+      requestId,
+      error: error.message,
+      stack: error.stack,
+      path: req.path,
+      method: req.method,
+    });
 
     if (error instanceof AppError) {
       return res.status(error.statusCode).json({
         success: false,
         error: error.toJSON().error,
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (error.message?.includes('ECONNREFUSED')) {
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Service temporarily unavailable',
+          userMessage: '服务暂时不可用，请稍后重试',
+        },
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (error.message?.includes('ETIMEDOUT') || error.message?.includes('timeout')) {
+      return res.status(504).json({
+        success: false,
+        error: {
+          code: 'TIMEOUT',
+          message: 'Request timeout',
+          userMessage: '请求超时，请稍后重试',
+        },
+        requestId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (error.message?.includes('ENOSPACE') || error.message?.includes('ENOSPC')) {
+      return res.status(507).json({
+        success: false,
+        error: {
+          code: 'DISK_FULL',
+          message: 'Disk space exhausted',
+          userMessage: '服务器磁盘空间不足',
+        },
+        requestId,
         timestamp: new Date().toISOString(),
       });
     }
@@ -695,7 +743,9 @@ export function createServer() {
       error: {
         code: 'INTERNAL_ERROR',
         message: error.message || 'Internal server error',
+        userMessage: '服务器内部错误，请稍后重试',
       },
+      requestId,
       timestamp: new Date().toISOString(),
     });
   });

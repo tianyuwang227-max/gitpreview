@@ -1079,7 +1079,24 @@
     }
 
     function showError(message) {
-      error.textContent = message;
+      const errorMap = {
+        'Repository not found': '仓库不存在或已被删除',
+        'Repository is private': '这是私有仓库，无法预览',
+        'rate limit': 'GitHub API 请求过于频繁，请稍后重试',
+        'timeout': '请求超时，请稍后重试',
+        'Failed to fetch': '网络连接失败，请检查网络',
+        'NetworkError': '网络连接失败，请检查网络',
+      };
+
+      let userMessage = message;
+      for (const [key, value] of Object.entries(errorMap)) {
+        if (message.toLowerCase().includes(key.toLowerCase())) {
+          userMessage = value;
+          break;
+        }
+      }
+
+      error.textContent = userMessage;
       error.classList.add('active');
     }
 
@@ -1093,6 +1110,21 @@
       }
       return num.toString();
     }
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      showError('发生未知错误，请刷新页面重试');
+    });
+
+    window.addEventListener('error', (event) => {
+      console.error('Global error:', event.error);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && ws === null) {
+        connectWebSocket();
+      }
+    });
   </script>
 </body>
 </html>
