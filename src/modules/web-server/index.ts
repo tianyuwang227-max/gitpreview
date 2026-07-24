@@ -1,6 +1,7 @@
 import http from 'http';
 import { createServer } from './server';
 import { initWebSocket } from '../websocket';
+import { setupGracefulShutdown } from '../../utils/shutdown';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 
@@ -14,6 +15,7 @@ export function startServer(port?: number) {
   const server = http.createServer(app);
 
   initWebSocket(server);
+  setupGracefulShutdown(server);
 
   server.listen(serverPort, () => {
     logger.info(`GitPreview server running on port ${serverPort}`);

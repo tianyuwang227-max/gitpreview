@@ -37,6 +37,7 @@ import {
   accessTracker,
   governanceManager,
 } from '../governance';
+import { getHealthStatus } from '../../utils/health';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -181,17 +182,14 @@ export function createServer() {
   });
 
   app.get('/api/health', async (req: Request, res: Response) => {
-    const response: ApiResponse = {
-      success: true,
-      data: {
-        status: 'ok',
-        tasks: taskQueue.getStats(),
-        cache: getCacheStats(),
-        performance: perfMonitor.getStats(),
-      },
+    const health = await getHealthStatus();
+    const statusCode = health.status === 'unhealthy' ? 503 : 200;
+
+    res.status(statusCode).json({
+      success: health.status !== 'unhealthy',
+      data: health,
       timestamp: new Date().toISOString(),
-    };
-    res.json(response);
+    });
   });
 
   app.get('/api/governance', async (req: Request, res: Response, next: NextFunction) => {
