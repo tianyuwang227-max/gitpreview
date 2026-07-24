@@ -31,6 +31,12 @@ import {
   getAllPreviews,
   getRunningPreviews,
 } from '../preview-runner';
+import {
+  getGovernanceStatus,
+  checkRequestAllowed,
+  accessTracker,
+  governanceManager,
+} from '../governance';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -46,6 +52,27 @@ export function createServer() {
   app.use(express.json());
   app.use(express.static(path.join(process.cwd(), 'public')));
   app.use('/screenshots', express.static(path.join(config.clone.baseDir, '.screenshots')));
+
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const startTime = Date.now();
+
+    res.on('finish', () => {
+      const duration = Date.now() - startTime;
+      accessTracker.recordRequest(duration, res.statusCode < 400, ip);
+    });
+
+    const check = await checkRequestAllowed(ip);
+    if (!check.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: { code: 'RATE_LIMIT', message: check.reason },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    next();
+  });
 
   taskQueue.registerHandler('preview', async (task) => {
     const { url, useDocker = false } = task.data;
@@ -153,7 +180,7 @@ export function createServer() {
     return result;
   });
 
-  app.get('/api/health', (req: Request, res: Response) => {
+  app.get('/api/health', async (req: Request, res: Response) => {
     const response: ApiResponse = {
       success: true,
       data: {
@@ -165,6 +192,41 @@ export function createServer() {
       timestamp: new Date().toISOString(),
     };
     res.json(response);
+  });
+
+  app.get('/api/governance', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const status = await getGovernanceStatus();
+      res.json({
+        success: true,
+        data: status,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/governance/alerts', (req: Request, res: Response) => {
+    const alerts = governanceManager.getAlerts();
+    res.json({
+      success: true,
+      data: { alerts },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.post('/api/governance/cleanup', async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await governanceManager.performCleanup();
+      res.json({
+        success: true,
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get('/api/discovery', async (req: Request, res: Response, next: NextFunction) => {
