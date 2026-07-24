@@ -565,12 +565,16 @@
       </div>
       <div class="preview-options">
         <label class="preview-option">
-          <input type="radio" name="previewMode" value="screenshot" checked>
+          <input type="radio" name="previewMode" value="auto" checked>
+          <span>Auto</span>
+        </label>
+        <label class="preview-option">
+          <input type="radio" name="previewMode" value="screenshot">
           <span>Screenshot</span>
         </label>
         <label class="preview-option">
           <input type="radio" name="previewMode" value="live">
-          <span>Live Preview (真实运行)</span>
+          <span>Live Preview</span>
         </label>
       </div>
     </div>
@@ -835,19 +839,13 @@
 
       const mode = getPreviewMode();
 
-      if (mode === 'live') {
-        await handleLivePreview(url);
-      } else {
-        await handleScreenshotPreview(url);
-      }
-    }
-
-    async function handleScreenshotPreview(url) {
       try {
+        updateProgressUI(10, '正在处理请求...');
+
         const response = await fetch('/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, async: true }),
+          body: JSON.stringify({ url, mode }),
         });
 
         const data = await response.json();
@@ -856,38 +854,15 @@
           throw new Error(data.error?.message || 'Failed to fetch repository');
         }
 
-        const { taskId } = data.data;
-        subscribeToTask(taskId);
-      } catch (err) {
-        showError(err.message);
-        hideLoading();
-        btn.disabled = false;
-      }
-    }
-
-    async function handleLivePreview(url) {
-      try {
-        updateProgressUI(10, '正在创建预览...');
-
-        const response = await fetch('/api/live-preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
-        });
-
-        const data = await response.json();
-
-        if (!data.success) {
-          throw new Error(data.error?.message || 'Failed to create preview');
+        if (data.data.mode === 'live') {
+          updateProgressUI(50, '正在等待应用启动...');
+          await waitForPreviewReady(data.data.id);
+          updateProgressUI(100, '预览就绪!');
+          showLivePreview(data.data);
+        } else {
+          updateProgressUI(100, '截图完成!');
+          showScreenshotPreview(data.data);
         }
-
-        currentLivePreviewId = data.data.id;
-        updateProgressUI(50, '正在等待应用启动...');
-
-        await waitForPreviewReady(data.data.id);
-
-        updateProgressUI(100, '预览就绪!');
-        showLivePreview(data.data);
 
         hideLoading();
         btn.disabled = false;
@@ -943,11 +918,13 @@
     }
 
     function showLivePreview(data) {
-      document.getElementById('iframeUrl').textContent = data.url;
-      document.getElementById('previewIframe').src = `/preview/${data.id}`;
+      const previewUrl = data.url || `/preview/${data.id}`;
+      document.getElementById('iframeUrl').textContent = previewUrl;
+      document.getElementById('previewIframe').src = previewUrl;
       document.getElementById('livePreviewId').textContent = data.id.substring(0, 8) + '...';
-      document.getElementById('livePreviewStatus').textContent = data.status;
+      document.getElementById('livePreviewStatus').textContent = data.status || 'running';
 
+      currentLivePreviewId = data.id;
       livePreview.classList.add('active');
     }
 

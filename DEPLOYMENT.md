@@ -2,24 +2,114 @@
 
 GitPreview 支持多种部署方式。
 
-## 快速部署
+## 推荐部署方式
 
-### Vercel (推荐)
+### VPS / 专用服务器（推荐）
 
-1. Fork 本仓库
-2. 在 [Vercel](https://vercel.com) 导入项目
-3. 配置环境变量：
-   - `GITHUB_TOKEN`: GitHub API Token
-4. 部署完成
+GitPreview 需要：
+- 运行子进程
+- 动态分配端口
+- 长生命周期进程
 
-### Railway
+因此推荐使用 VPS 或专用服务器部署。
 
-1. 在 [Railway](https://railway.app) 创建新项目
-2. 连接 GitHub 仓库
-3. 配置环境变量
-4. 自动部署
+#### 系统要求
 
-### Docker
+- Node.js 18+
+- Git
+- 2GB+ RAM
+- 20GB+ 磁盘空间
+
+#### 部署步骤
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/tianyuwang227-max/gitpreview.git
+cd gitpreview
+
+# 2. 安装依赖
+npm ci
+
+# 3. 构建
+npm run build
+
+# 4. 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件，设置 GITHUB_TOKEN
+
+# 5. 启动服务
+npm start
+```
+
+#### 使用 PM2 管理进程
+
+```bash
+# 安装 PM2
+npm install -g pm2
+
+# 启动服务
+pm2 start dist/modules/web-server/index.js --name gitpreview
+
+# 设置开机自启
+pm2 startup
+pm2 save
+
+# 查看日志
+pm2 logs gitpreview
+
+# 重启服务
+pm2 restart gitpreview
+```
+
+#### Nginx 反向代理
+
+```nginx
+server {
+    listen 80;
+    server_name preview.example.com;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300s;
+    }
+
+    # WebSocket 支持
+    location /ws {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+
+    # 预览代理
+    location /preview/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+#### HTTPS 配置
+
+```bash
+# 使用 Certbot
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d preview.example.com
+```
+
+### Docker 部署
+
+> ⚠️ 注意：Docker 部署需要特殊配置才能支持子进程运行。
 
 ```bash
 # 构建镜像
@@ -29,26 +119,11 @@ docker build -t gitpreview .
 docker run -d \
   --name gitpreview \
   -p 3000:3000 \
-  -e GITHUB_TOKEN=your_token \
-  -v $(pwd)/data:/app/data \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v gitpreview-data:/app/data \
+  -e GITHUB_TOKEN=${GITHUB_TOKEN} \
+  --privileged \
   gitpreview
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  gitpreview:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
 ```
 
 ## 环境变量
@@ -59,48 +134,31 @@ services:
 | PORT | 否 | 3000 | 服务端口 |
 | GITHUB_TOKEN | 否 | - | GitHub API Token |
 | CLONE_BASE_DIR | 否 | ./projects | 克隆目录 |
-| CORS_ORIGIN | 否 | * | CORS 配置 |
+| CLONE_TIMEOUT | 否 | 60000 | 克隆超时(ms) |
 
-## 生产环境优化
+## 安全配置
 
-### 1. 启用 GitHub Token
+### 限制并发预览数
 
-```bash
-export GITHUB_TOKEN=ghp_xxxxxxxxxxxx
+编辑 `src/utils/security.ts`:
+
+```typescript
+export const SECURITY_CONFIG = {
+  maxConcurrentPreviews: 5,  // 最大同时预览数
+  maxDiskUsageMB: 500,       // 磁盘使用上限
+  maxProcessCount: 10,       // 最大进程数
+  maxTimeoutMs: 300000,      // 超时时间
+  maxIdleMs: 600000,         // 空闲超时
+};
 ```
 
-### 2. 配置反向代理 (Nginx)
-
-```nginx
-server {
-    listen 80;
-    server_name gitpreview.example.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-### 3. 启用 HTTPS
+### 防火墙配置
 
 ```bash
-# 使用 Certbot
-sudo certbot --nginx -d gitpreview.example.com
-```
-
-### 4. 配置 PM2
-
-```bash
-npm install -g pm2
-pm2 start dist/modules/web-server/index.js --name gitpreview
-pm2 save
-pm2 startup
+# 只允许 HTTP/HTTPS
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
 ```
 
 ## 监控
@@ -111,39 +169,83 @@ pm2 startup
 curl http://localhost:3000/api/health
 ```
 
+### 查看运行中的预览
+
+```bash
+curl http://localhost:3000/api/live-previews
+```
+
 ### 日志
 
 ```bash
 # PM2 日志
 pm2 logs gitpreview
 
-# Docker 日志
-docker logs gitpreview
+# 系统日志
+journalctl -u gitpreview -f
 ```
 
 ## 故障排除
 
-### 问题：Puppeteer 无法启动
+### 端口被占用
 
 ```bash
-# 安装依赖
-apt-get update && apt-get install -y \
-  chromium \
-  fonts-ipafont-gothic \
-  fonts-freefont-tty \
-  --no-install-recommends
+# 查看端口使用情况
+lsof -i :3000
+
+# 杀死占用进程
+kill -9 <PID>
 ```
 
-### 问题：Git clone 失败
+### 进程残留
 
-检查 Git 是否安装：
 ```bash
-git --version
+# 查看所有 node 进程
+ps aux | grep node
+
+# 杀死所有相关进程
+pkill -f gitpreview
 ```
 
-### 问题：API 限速
+### 磁盘空间不足
 
-配置 GitHub Token：
 ```bash
-export GITHUB_TOKEN=your_token
+# 清理旧的预览文件
+rm -rf projects/*
+
+# 查看磁盘使用
+df -h
+du -sh projects/
+```
+
+## 不支持的部署平台
+
+以下平台不适合 GitPreview：
+
+- **Vercel**: 不支持长生命周期进程、端口代理
+- **Netlify**: 不支持后端服务
+- **Cloudflare Workers**: 不支持子进程
+- **AWS Lambda**: 有执行时间限制
+
+## 性能优化
+
+### 增加文件描述符限制
+
+```bash
+# 编辑 /etc/security/limits.conf
+* soft nofile 65536
+* hard nofile 65536
+```
+
+### 配置 swap
+
+```bash
+# 创建 2GB swap
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# 永久启用
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```

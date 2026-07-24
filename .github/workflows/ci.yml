@@ -27,27 +27,10 @@ jobs:
         run: npm ci
 
       - name: Run linter
-        run: npm run lint || true
+        run: npm run lint
 
       - name: Run tests
-        run: npm test
+        run: npm test -- --forceExit
 
       - name: Build
         run: npm run build
-
-  build-docker:
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Build Docker image
-        run: docker build -t gitpreview .
-
-      - name: Test Docker image
-        run: |
-          docker run -d --name test -p 3000:3000 gitpreview
-          sleep 5
-          curl -f http://localhost:3000/api/health || exit 1
-          docker stop test

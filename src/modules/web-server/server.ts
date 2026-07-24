@@ -519,32 +519,44 @@ export function createServer() {
   });
 
   app.post('/api/preview', async (req: Request, res: Response, next: NextFunction) => {
-    const { url, async: isAsync } = req.body;
+    const { url, mode = 'auto' } = req.body;
 
     if (!url) {
-      const response: ApiResponse = {
+      return res.status(400).json({
         success: false,
-        error: {
-          code: 'INVALID_URL',
-          message: 'URL is required',
-        },
+        error: { code: 'INVALID_URL', message: 'URL is required' },
         timestamp: new Date().toISOString(),
-      };
-      return res.status(400).json(response);
+      });
     }
 
     try {
-      if (isAsync) {
-        const taskId = await taskQueue.enqueue('preview', { url });
-        const response: ApiResponse = {
-          success: true,
-          data: { taskId },
-          timestamp: new Date().toISOString(),
-        };
-        return res.status(202).json(response);
-      }
+      logger.info(`Processing preview request: ${url}, mode: ${mode}`);
 
-      logger.info(`Processing preview request: ${url}`);
+      if (mode === 'live') {
+        const result = await createPreview(url);
+
+        if (!result.success) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'PREVIEW_FAILED', message: result.error, phase: result.phase },
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const instance = result.instance!;
+        return res.json({
+          success: true,
+          data: {
+            mode: 'live',
+            id: instance.id,
+            url: `/preview/${instance.id}`,
+            directUrl: instance.url,
+            port: instance.port,
+            status: instance.status,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       const cloneResult = await processGithubUrl(url);
       const screenshotResult = await captureGitHubRepo(
@@ -552,9 +564,10 @@ export function createServer() {
         cloneResult.repo.name
       );
 
-      const response: ApiResponse<RepoPreviewResponse> = {
+      const response: ApiResponse = {
         success: true,
         data: {
+          mode: 'screenshot',
           repo: cloneResult.repo,
           preview: {
             type: 'screenshot',
