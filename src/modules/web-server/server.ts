@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import { processGithubUrl } from '../github-repo-manager';
 import { captureGitHubRepo } from '../screenshot-service';
 import { runAndCapture } from '../docker-runner';
@@ -23,6 +24,13 @@ import {
   removeFromHistory,
   clearHistory,
 } from '../history';
+import {
+  createPreview,
+  stopPreview,
+  getPreview,
+  getAllPreviews,
+  getRunningPreviews,
+} from '../preview-runner';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
 import { AppError } from '../../utils/errors';
@@ -357,6 +365,157 @@ export function createServer() {
     } catch (error) {
       next(error);
     }
+  });
+
+  app.post('/api/live-preview', async (req: Request, res: Response, next: NextFunction) => {
+    const { url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_URL', message: 'URL is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    try {
+      logger.info(`Creating live preview for: ${url}`);
+      const result = await createPreview(url);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'PREVIEW_FAILED', message: result.error, phase: result.phase },
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      res.status(201).json({
+        success: true,
+        data: {
+          id: result.instance!.id,
+          url: result.instance!.url,
+          port: result.instance!.port,
+          status: result.instance!.status,
+          repo: result.instance!.repoFullName,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/live-preview/:id', (req: Request, res: Response) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const instance = getPreview(id);
+
+    if (!instance) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Preview not found' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: instance.id,
+        url: instance.url,
+        port: instance.port,
+        status: instance.status,
+        repo: instance.repoFullName,
+        startedAt: instance.startedAt,
+        lastAccessedAt: instance.lastAccessedAt,
+        config: instance.config,
+        logs: instance.logs.slice(-50),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.post('/api/live-preview/:id/stop', async (req: Request, res: Response, next: NextFunction) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+    try {
+      await stopPreview(id);
+      res.json({
+        success: true,
+        data: { message: 'Preview stopped' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/live-previews', (req: Request, res: Response) => {
+    const previews = getAllPreviews();
+
+    res.json({
+      success: true,
+      data: {
+        previews: previews.map(p => ({
+          id: p.id,
+          url: p.url,
+          port: p.port,
+          status: p.status,
+          repo: p.repoFullName,
+          startedAt: p.startedAt,
+        })),
+        total: previews.length,
+        running: getRunningPreviews().length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/live-previews/running', (req: Request, res: Response) => {
+    const previews = getRunningPreviews();
+
+    res.json({
+      success: true,
+      data: {
+        previews: previews.map(p => ({
+          id: p.id,
+          url: p.url,
+          port: p.port,
+          status: p.status,
+          repo: p.repoFullName,
+          startedAt: p.startedAt,
+        })),
+        total: previews.length,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  const previewProxies = new Map<string, any>();
+
+  app.use('/preview/:id', (req: Request, res: Response, next: NextFunction) => {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const instance = getPreview(id);
+
+    if (!instance || instance.status !== 'running') {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'PREVIEW_NOT_RUNNING', message: 'Preview is not running' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!previewProxies.has(id)) {
+      const proxy = createProxyMiddleware({
+        target: instance.url,
+        changeOrigin: true,
+        ws: true,
+      });
+      previewProxies.set(id, proxy);
+    }
+
+    const proxy = previewProxies.get(id);
+    proxy(req, res, next);
   });
 
   app.post('/api/preview', async (req: Request, res: Response, next: NextFunction) => {

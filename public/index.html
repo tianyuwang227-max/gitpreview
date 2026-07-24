@@ -328,6 +328,97 @@
       color: white;
     }
 
+    .preview-options {
+      display: flex;
+      gap: 20px;
+      margin-top: 12px;
+    }
+
+    .preview-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #8b949e;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .preview-option input[type="radio"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #58a6ff;
+    }
+
+    .live-preview-container {
+      display: none;
+    }
+
+    .live-preview-container.active {
+      display: block;
+    }
+
+    .iframe-wrapper {
+      position: relative;
+      width: 100%;
+      height: 600px;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .iframe-wrapper iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .iframe-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px 8px 0 0;
+    }
+
+    .iframe-url {
+      flex: 1;
+      padding: 8px 12px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .iframe-btn {
+      padding: 8px 16px;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e6edf3;
+      cursor: pointer;
+      font-size: 0.9rem;
+      margin-left: 8px;
+    }
+
+    .iframe-btn:hover {
+      background: #30363d;
+    }
+
+    .iframe-btn.stop {
+      background: #f8514922;
+      border-color: #f85149;
+      color: #f85149;
+    }
+
+    .iframe-btn.stop:hover {
+      background: #f8514944;
+    }
+
     .analysis-section {
       margin-top: 24px;
       padding-top: 24px;
@@ -472,10 +563,16 @@
         >
         <button id="previewBtn" onclick="handlePreview()">Preview</button>
       </div>
-      <label class="docker-option">
-        <input type="checkbox" id="useDocker">
-        <span>Use Docker for live preview (experimental)</span>
-      </label>
+      <div class="preview-options">
+        <label class="preview-option">
+          <input type="radio" name="previewMode" value="screenshot" checked>
+          <span>Screenshot</span>
+        </label>
+        <label class="preview-option">
+          <input type="radio" name="previewMode" value="live">
+          <span>Live Preview (真实运行)</span>
+        </label>
+      </div>
     </div>
 
     <div class="error" id="error"></div>
@@ -542,6 +639,43 @@
       </div>
     </div>
 
+    <div class="live-preview-container" id="livePreview">
+      <div class="iframe-controls">
+        <span class="iframe-url" id="iframeUrl"></span>
+        <button class="iframe-btn" onclick="openInNewTab()">Open in New Tab</button>
+        <button class="iframe-btn stop" onclick="stopLivePreview()">Stop Preview</button>
+      </div>
+      <div class="iframe-wrapper">
+        <iframe id="previewIframe" src=""></iframe>
+      </div>
+      <div class="repo-info">
+        <div class="repo-header">
+          <span class="repo-name" id="liveRepoName"></span>
+          <a class="btn-github" id="liveGithubLink" href="#" target="_blank">
+            View on GitHub
+          </a>
+        </div>
+        <div class="repo-stats">
+          <div class="stat">
+            <span>Language:</span>
+            <span class="stat-value" id="liveRepoLanguage"></span>
+          </div>
+          <div class="stat">
+            <span>Stars:</span>
+            <span class="stat-value" id="liveRepoStars"></span>
+          </div>
+          <div class="stat">
+            <span>Preview ID:</span>
+            <span class="stat-value" id="livePreviewId"></span>
+          </div>
+          <div class="stat">
+            <span>Status:</span>
+            <span class="stat-value" id="livePreviewStatus"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="examples">
       <h3>Try these examples:</h3>
       <div class="example-links">
@@ -558,16 +692,21 @@
     const btn = document.getElementById('previewBtn');
     const loading = document.getElementById('loading');
     const preview = document.getElementById('preview');
+    const livePreview = document.getElementById('livePreview');
     const error = document.getElementById('error');
-    const useDocker = document.getElementById('useDocker');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
 
     let ws = null;
     let currentTaskId = null;
+    let currentLivePreviewId = null;
     let pendingTaskId = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 10;
+
+    function getPreviewMode() {
+      return document.querySelector('input[name="previewMode"]:checked').value;
+    }
 
     function connectWebSocket() {
       if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) {
@@ -629,7 +768,7 @@
 
         case 'completed':
           if (message.taskId === currentTaskId) {
-            showPreview(message.data);
+            showScreenshotPreview(message.data);
             hideLoading();
             btn.disabled = false;
             currentTaskId = null;
@@ -689,16 +828,26 @@
       }
 
       hideError();
-      hidePreview();
+      hideAllPreviews();
       showLoading();
       btn.disabled = true;
       updateProgressUI(0, '正在提交请求...');
 
+      const mode = getPreviewMode();
+
+      if (mode === 'live') {
+        await handleLivePreview(url);
+      } else {
+        await handleScreenshotPreview(url);
+      }
+    }
+
+    async function handleScreenshotPreview(url) {
       try {
         const response = await fetch('/api/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, async: true, useDocker: useDocker.checked }),
+          body: JSON.stringify({ url, async: true }),
         });
 
         const data = await response.json();
@@ -716,48 +865,60 @@
       }
     }
 
-    async function pollTaskStatus(taskId) {
-      const maxAttempts = 60;
-      const interval = 2000;
+    async function handleLivePreview(url) {
+      try {
+        updateProgressUI(10, '正在创建预览...');
 
-      for (let i = 0; i < maxAttempts; i++) {
-        const response = await fetch(`/api/tasks/${taskId}`);
+        const response = await fetch('/api/live-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+
         const data = await response.json();
 
         if (!data.success) {
-          throw new Error(data.error?.message || 'Failed to get task status');
+          throw new Error(data.error?.message || 'Failed to create preview');
         }
 
-        const { status, result, error, progress } = data.data;
+        currentLivePreviewId = data.data.id;
+        updateProgressUI(50, '正在等待应用启动...');
 
-        if (status === 'completed' && result) {
-          showPreview(result);
+        await waitForPreviewReady(data.data.id);
+
+        updateProgressUI(100, '预览就绪!');
+        showLivePreview(data.data);
+
+        hideLoading();
+        btn.disabled = false;
+      } catch (err) {
+        showError(err.message);
+        hideLoading();
+        btn.disabled = false;
+      }
+    }
+
+    async function waitForPreviewReady(id, maxAttempts = 60) {
+      for (let i = 0; i < maxAttempts; i++) {
+        const response = await fetch(`/api/live-preview/${id}`);
+        const data = await response.json();
+
+        if (data.success && data.data.status === 'running') {
           return;
         }
 
-        if (status === 'failed') {
-          throw new Error(error || 'Task failed');
+        if (data.data.status === 'failed') {
+          throw new Error('Preview failed to start');
         }
 
-        if (progress !== undefined) {
-          updateProgress(progress);
-        }
-
-        await new Promise(resolve => setTimeout(resolve, interval));
+        updateProgressUI(30 + (i / maxAttempts) * 20, '正在等待应用启动...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
       throw new Error('Timeout waiting for preview');
     }
 
-    function showLoading() {
-      loading.classList.add('active');
-    }
-
-    function hideLoading() {
-      loading.classList.remove('active');
-    }
-
-    function showPreview(data) {
+    function showScreenshotPreview(data) {
       document.getElementById('screenshot').src = data.screenshot.imagePath;
       document.getElementById('repoName').textContent = data.repo.fullName;
 
@@ -779,6 +940,33 @@
       }
 
       preview.classList.add('active');
+    }
+
+    function showLivePreview(data) {
+      document.getElementById('iframeUrl').textContent = data.url;
+      document.getElementById('previewIframe').src = `/preview/${data.id}`;
+      document.getElementById('livePreviewId').textContent = data.id.substring(0, 8) + '...';
+      document.getElementById('livePreviewStatus').textContent = data.status;
+
+      livePreview.classList.add('active');
+    }
+
+    function openInNewTab() {
+      if (currentLivePreviewId) {
+        window.open(`/preview/${currentLivePreviewId}`, '_blank');
+      }
+    }
+
+    async function stopLivePreview() {
+      if (!currentLivePreviewId) return;
+
+      try {
+        await fetch(`/api/live-preview/${currentLivePreviewId}/stop`, { method: 'POST' });
+        currentLivePreviewId = null;
+        hideAllPreviews();
+      } catch (error) {
+        console.error('Failed to stop preview:', error);
+      }
     }
 
     function renderAnalysis(analysis) {
@@ -852,21 +1040,17 @@
       `).join('');
     }
 
-    function updateProgress(progress) {
-      const loadingText = document.getElementById('loadingText');
-      if (progress < 20) {
-        loadingText.textContent = 'Validating URL...';
-      } else if (progress < 50) {
-        loadingText.textContent = 'Fetching repository information...';
-      } else if (progress < 90) {
-        loadingText.textContent = 'Capturing repository screenshot...';
-      } else {
-        loadingText.textContent = 'Finalizing...';
-      }
+    function showLoading() {
+      loading.classList.add('active');
     }
 
-    function hidePreview() {
+    function hideLoading() {
+      loading.classList.remove('active');
+    }
+
+    function hideAllPreviews() {
       preview.classList.remove('active');
+      livePreview.classList.remove('active');
     }
 
     function showError(message) {
