@@ -1,0 +1,12 @@
+{
+  "repos": [
+    {
+      "owner": "octocat",
+      "repo": "Hello-World",
+      "ref": "master",
+      "allowScripts": false,
+      "startCommand": null,
+      "port": null
+    }
+  ]
+}

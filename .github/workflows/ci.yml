@@ -30,7 +30,7 @@ jobs:
         run: npm run lint
 
       - name: Run tests
-        run: npm test -- --forceExit
+        run: npm test
 
       - name: Build
         run: npm run build

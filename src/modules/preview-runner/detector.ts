@@ -24,8 +24,7 @@ export async function detectProjectConfig(repoPath: string): Promise<ProjectConf
       buildCommand: null,
       startCommand: 'npx http-server .',
       port: 8080,
-      outputDir: null,
-      framework: null,
+      allowScripts: false,
     };
   }
 
@@ -36,8 +35,7 @@ export async function detectProjectConfig(repoPath: string): Promise<ProjectConf
     buildCommand: null,
     startCommand: '',
     port: 3000,
-    outputDir: null,
-    framework: null,
+    allowScripts: false,
   };
 }
 
@@ -54,54 +52,28 @@ async function detectNodeProject(repoPath: string): Promise<ProjectConfig> {
 
   for (const [dep, config] of Object.entries(SUPPORTED_FRAMEWORKS)) {
     if (allDeps[dep]) {
-      logger.info(`Detected framework: ${config.framework}`);
-
-      const scripts = packageJson.scripts || {};
-
-      let startCommand = config.startCommand;
-      if (config.framework === 'vite' && scripts.preview) {
-        startCommand = 'npm run preview';
-      } else if (config.framework === 'react' && scripts.serve) {
-        startCommand = 'npm run serve';
-      }
-
-      let buildCommand = config.buildCommand;
-      if (scripts.build) {
-        buildCommand = `${packageManager} run build`;
-      }
+      logger.info(`Detected framework: ${dep}`);
 
       return {
         type: 'node',
         packageManager,
-        installCommand: `${packageManager} install`,
-        buildCommand: buildCommand ?? null,
-        startCommand: startCommand ?? `${packageManager} start`,
+        installCommand: `${packageManager} ci --ignore-scripts`,
+        buildCommand: config.buildCommand || null,
+        startCommand: config.startCommand || `${packageManager} start`,
         port: config.port || 3000,
-        outputDir: config.outputDir ?? null,
-        framework: config.framework ?? null,
+        allowScripts: false,
       };
     }
-  }
-
-  const scripts = packageJson.scripts || {};
-  let startCommand = 'npm start';
-  if (scripts.dev) {
-    startCommand = `${packageManager} run dev`;
-  } else if (scripts.start) {
-    startCommand = `${packageManager} start`;
-  } else if (packageJson.main) {
-    startCommand = `node ${packageJson.main}`;
   }
 
   return {
     type: 'node',
     packageManager,
-    installCommand: `${packageManager} install`,
-    buildCommand: scripts.build ? `${packageManager} run build` : null,
-    startCommand,
+    installCommand: `${packageManager} ci --ignore-scripts`,
+    buildCommand: packageJson.scripts?.build ? `${packageManager} run build` : null,
+    startCommand: packageJson.scripts?.start ? `${packageManager} start` : `node ${packageJson.main || 'index.js'}`,
     port: 3000,
-    outputDir: null,
-    framework: null,
+    allowScripts: false,
   };
 }
 
@@ -113,22 +85,7 @@ async function detectPackageManager(repoPath: string): Promise<'npm' | 'yarn' | 
   return 'npm';
 }
 
-async function detectPythonProject(repoPath: string): Promise<ProjectConfig> {
-  const files = await fs.readdir(repoPath);
-
-  if (files.includes('requirements.txt')) {
-    return {
-      type: 'python',
-      packageManager: 'pip',
-      installCommand: 'pip install -r requirements.txt',
-      buildCommand: null,
-      startCommand: 'python app.py',
-      port: 5000,
-      outputDir: null,
-      framework: null,
-    };
-  }
-
+async function detectPythonProject(_repoPath: string): Promise<ProjectConfig> {
   return {
     type: 'python',
     packageManager: 'pip',
@@ -136,7 +93,6 @@ async function detectPythonProject(repoPath: string): Promise<ProjectConfig> {
     buildCommand: null,
     startCommand: 'python app.py',
     port: 5000,
-    outputDir: null,
-    framework: null,
+    allowScripts: false,
   };
 }

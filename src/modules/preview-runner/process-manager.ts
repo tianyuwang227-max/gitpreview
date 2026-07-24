@@ -4,13 +4,7 @@ import treeKill from 'tree-kill';
 import { PreviewInstance, ProjectConfig } from './types';
 import { allocatePort, releasePort, waitForPort } from './port-manager';
 import { logger } from '../../utils/logger';
-import {
-  sanitizeEnvironment,
-  sanitizeCommand,
-  parseCommand,
-  validateScriptName,
-  SECURITY_CONFIG,
-} from '../../utils/security';
+import { config } from '../../config';
 
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ChildProcess> = new Map();
@@ -22,21 +16,21 @@ export class ProcessManager extends EventEmitter {
   }
 
   canStartNew(): boolean {
-    return this.getRunningCount() < SECURITY_CONFIG.maxConcurrentPreviews;
+    return this.getRunningCount() < config.preview.maxConcurrent;
   }
 
   async startPreview(
     id: string,
     repoPath: string,
-    config: ProjectConfig
+    projectConfig: ProjectConfig
   ): Promise<PreviewInstance> {
     if (!this.canStartNew()) {
-      throw new Error(`Maximum concurrent previews reached (${SECURITY_CONFIG.maxConcurrentPreviews})`);
+      throw new Error(`Maximum concurrent previews reached (${config.preview.maxConcurrent})`);
     }
 
     logger.info(`Starting preview for ${id}`);
 
-    const port = await allocatePort(config.port);
+    const port = await allocatePort(projectConfig.port);
 
     const instance: PreviewInstance = {
       id,
@@ -48,34 +42,25 @@ export class ProcessManager extends EventEmitter {
       pid: null,
       startedAt: new Date(),
       lastAccessedAt: new Date(),
-      timeout: SECURITY_CONFIG.maxTimeoutMs,
-      idleTimeout: SECURITY_CONFIG.maxIdleMs,
-      config,
+      timeout: config.preview.maxTimeoutMs,
+      idleTimeout: config.preview.maxIdleMs,
+      config: projectConfig,
       logs: [],
     };
 
     this.instances.set(id, instance);
 
     try {
-      if (config.installCommand) {
-        if (!validateScriptName('install')) {
-          throw new Error('Install command is not allowed');
-        }
-        await this.runCommand(id, repoPath, config.installCommand, 120000);
+      if (projectConfig.installCommand) {
+        await this.runCommand(id, repoPath, projectConfig.installCommand, 120000);
       }
 
-      if (config.buildCommand) {
-        if (!validateScriptName('build')) {
-          throw new Error('Build command is not allowed');
-        }
-        await this.runCommand(id, repoPath, config.buildCommand, 120000);
+      if (projectConfig.buildCommand) {
+        await this.runCommand(id, repoPath, projectConfig.buildCommand, 120000);
       }
 
-      if (config.startCommand) {
-        if (!validateScriptName('start')) {
-          throw new Error('Start command is not allowed');
-        }
-        const childProcess = this.spawnProcess(id, repoPath, config.startCommand, port);
+      if (projectConfig.startCommand) {
+        const childProcess = this.spawnProcess(id, repoPath, projectConfig.startCommand, port);
         instance.pid = childProcess.pid || null;
       }
 
@@ -102,14 +87,19 @@ export class ProcessManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       logger.info(`Running command for ${id}: ${command}`);
 
-      const sanitizedCommand = sanitizeCommand(command);
-      const { cmd, args } = parseCommand(sanitizedCommand);
+      const parts = command.split(/\s+/).filter(Boolean);
+      const cmd = parts[0];
+      const args = parts.slice(1);
 
       const childProcess = spawn(cmd, args, {
         cwd,
         shell: false,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: sanitizeEnvironment(process.env),
+        env: {
+          NODE_ENV: 'development',
+          PATH: process.env.PATH,
+          HOME: process.env.HOME,
+        },
         detached: false,
       });
 
@@ -143,20 +133,21 @@ export class ProcessManager extends EventEmitter {
   }
 
   private spawnProcess(id: string, cwd: string, command: string, port: number): ChildProcess {
-    const sanitizedCommand = sanitizeCommand(command);
-    const { cmd, args } = parseCommand(sanitizedCommand);
+    const parts = command.split(/\s+/).filter(Boolean);
+    const cmd = parts[0];
+    const args = parts.slice(1);
 
     const childProcess = spawn(cmd, args, {
       cwd,
       shell: false,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
-        ...sanitizeEnvironment(process.env),
+        NODE_ENV: 'development',
         PORT: port.toString(),
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
       },
       detached: false,
-      uid: undefined,
-      gid: undefined,
     });
 
     this.processes.set(id, childProcess);
@@ -194,23 +185,23 @@ export class ProcessManager extends EventEmitter {
     return childProcess;
   }
 
-  private killProcessTree(process: ChildProcess): void {
-    if (process.pid) {
+  private killProcessTree(childProcess: ChildProcess): void {
+    if (childProcess.pid) {
       try {
-        treeKill(process.pid, 'SIGTERM', (err) => {
+        treeKill(childProcess.pid, 'SIGTERM', (err) => {
           if (err) {
-            logger.warn(`Failed to kill process tree ${process.pid}: ${err}`);
+            logger.warn(`Failed to kill process tree ${childProcess.pid}: ${err}`);
             try {
-              process.kill('SIGKILL');
+              childProcess.kill('SIGKILL');
             } catch (killErr) {
-              logger.error(`Failed to force kill process ${process.pid}: ${killErr}`);
+              logger.error(`Failed to force kill process ${childProcess.pid}: ${killErr}`);
             }
           }
         });
       } catch (error) {
         logger.error(`Error killing process tree: ${error}`);
         try {
-          process.kill('SIGKILL');
+          childProcess.kill('SIGKILL');
         } catch (killErr) {
           // Process already dead
         }

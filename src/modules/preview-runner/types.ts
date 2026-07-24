@@ -1,15 +1,3 @@
-export interface ProjectInfo {
-  owner: string;
-  name: string;
-  fullName: string;
-  description: string;
-  language: string;
-  stars: number;
-  forks: number;
-  url: string;
-  defaultBranch: string;
-}
-
 export interface ProjectConfig {
   type: 'node' | 'python' | 'static' | 'unknown';
   packageManager: 'npm' | 'yarn' | 'pnpm' | 'pip' | 'unknown';
@@ -17,8 +5,7 @@ export interface ProjectConfig {
   buildCommand: string | null;
   startCommand: string;
   port: number;
-  outputDir: string | null;
-  framework: string | null;
+  allowScripts: boolean;
 }
 
 export interface PreviewInstance {
@@ -51,67 +38,34 @@ export interface CleanupResult {
 
 export const SUPPORTED_FRAMEWORKS: Record<string, Partial<ProjectConfig>> = {
   'vite': {
-    framework: 'vite',
+    type: 'node',
     buildCommand: 'npm run build',
     startCommand: 'npm run preview',
     port: 4173,
-    outputDir: 'dist',
   },
   'react-scripts': {
-    framework: 'react',
+    type: 'node',
     buildCommand: 'npm run build',
     startCommand: 'npx serve -s build',
     port: 3000,
-    outputDir: 'build',
   },
   'next': {
-    framework: 'nextjs',
+    type: 'node',
     buildCommand: 'npm run build',
     startCommand: 'npm start',
     port: 3000,
-    outputDir: '.next',
   },
   'vue': {
-    framework: 'vue',
+    type: 'node',
     buildCommand: 'npm run build',
     startCommand: 'npm run preview',
     port: 4173,
-    outputDir: 'dist',
-  },
-  'nuxt': {
-    framework: 'nuxt',
-    buildCommand: 'npm run build',
-    startCommand: 'npm run preview',
-    port: 3000,
-    outputDir: '.output',
-  },
-  'svelte': {
-    framework: 'svelte',
-    buildCommand: 'npm run build',
-    startCommand: 'npm run preview',
-    port: 4173,
-    outputDir: 'build',
-  },
-  'angular': {
-    framework: 'angular',
-    buildCommand: 'npm run build',
-    startCommand: 'npx http-server dist',
-    port: 4200,
-    outputDir: 'dist',
   },
   'express': {
-    framework: 'express',
+    type: 'node',
     buildCommand: null,
     startCommand: 'npm start',
     port: 3000,
-    outputDir: null,
-  },
-  'gatsby': {
-    framework: 'gatsby',
-    buildCommand: 'npm run build',
-    startCommand: 'npm run serve',
-    port: 9000,
-    outputDir: 'public',
   },
 };
 

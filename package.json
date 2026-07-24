@@ -1,43 +1,34 @@
 {
   "name": "gitpreview",
   "version": "1.0.0",
-  "description": "Preview GitHub projects without deployment",
+  "description": "Preview GitHub repositories locally - personal use only",
   "main": "dist/modules/web-server/index.js",
   "scripts": {
     "dev": "ts-node src/modules/web-server/index.ts",
     "build": "tsc",
     "start": "node dist/modules/web-server/index.js",
-    "test": "jest",
+    "test": "jest --forceExit",
     "lint": "eslint src --ext .ts",
-    "clean": "rm -rf dist projects data",
-    "vercel-build": "npm run build"
+    "clean": "rm -rf dist projects data"
   },
   "keywords": [
     "github",
-    "preview",
-    "demo"
+    "preview"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@types/ws": "^8.18.1",
     "axios": "^1.6.0",
-    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.21.0",
-    "http-proxy-middleware": "^4.2.0",
-    "prom-client": "^15.1.3",
+    "http-proxy-middleware": "^3.0.0",
     "puppeteer": "^25.3.0",
-    "puppeteer-core": "^25.3.0",
-    "rate-limiter-flexible": "^11.2.0",
     "simple-git": "^3.22.0",
     "tree-kill": "^1.2.2",
     "uuid": "^14.0.1",
-    "winston": "^3.11.0",
-    "ws": "^8.21.1"
+    "winston": "^3.11.0"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.10.0",

@@ -20,27 +20,18 @@ export const config = {
 
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
-    host: process.env.HOST || '0.0.0.0',
-    cors: process.env.CORS_ORIGIN || '*',
+    host: '127.0.0.1',
   },
 
   paths: {
     reposData: path.join(process.cwd(), 'data', 'repos.json'),
     favoritesData: path.join(process.cwd(), 'data', 'favorites.json'),
+    trustedRepos: path.join(process.cwd(), '.gitpreview', 'trusted-repos.json'),
   },
 
-  rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW || '900000', 10),
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
-  },
-
-  cache: {
-    ttl: parseInt(process.env.CACHE_TTL || '3600000', 10),
-    maxSize: parseInt(process.env.CACHE_MAX_SIZE || '1000', 10),
-  },
-
-  puppeteer: {
-    headless: process.env.PUPPETEER_HEADLESS !== 'false',
-    timeout: parseInt(process.env.PUPPETEER_TIMEOUT || '30000', 10),
+  preview: {
+    maxConcurrent: 1,
+    maxTimeoutMs: 300000,
+    maxIdleMs: 600000,
   },
 };

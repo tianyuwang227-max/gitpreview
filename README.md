@@ -1,185 +1,118 @@
-# GitPreview
+# GitPreview (Personal Edition)
 
-Preview GitHub repositories instantly - both screenshots and live running previews.
+**个人本地使用的 GitHub 仓库预览工具**
 
-[![CI](https://github.com/tianyuwang227-max/gitpreview/actions/workflows/ci.yml/badge.svg)](https://github.com/tianyuwang227-max/gitpreview/actions/workflows/ci.yml)
+> ⚠️ 本工具仅用于预览本人信任的 GitHub 仓库代码，不是安全沙箱，不得用于运行不可信代码。
 
-## Features
+## 功能
 
-- **Repository Preview** - Get screenshots or live running previews
-- **Project Detection** - Auto-detect Node.js, Python, Static projects
-- **Framework Support** - Vite, React, Vue, Next.js, Svelte, Express, etc.
-- **Real-time Progress** - WebSocket-based progress updates
-- **Security** - Sandboxed execution, rate limiting, resource quotas
-- **Governance** - Disk monitoring, auto-cleanup, access stats
-- **Monitoring** - Prometheus metrics, structured logging
+- **Screenshot 模式** - 截取 GitHub 仓库页面
+- **Live Preview 模式** - 在本地运行可信仓库（需配置）
+- **仓库分析** - README、技术栈、目录结构
 
-## Quick Start
+## 快速开始
 
 ```bash
-# Clone
+# 克隆
 git clone https://github.com/tianyuwang227-max/gitpreview.git
 cd gitpreview
 
-# Install
+# 安装
 npm ci
 
-# Build
+# 构建
 npm run build
 
-# Run
+# 配置可信仓库
+cp .gitpreview/trusted-repos.json.example .gitpreview/trusted-repos.json
+# 编辑 .gitpreview/trusted-repos.json
+
+# 启动（仅本地访问）
 npm start
 ```
 
-Open http://localhost:3000
+访问 http://127.0.0.1:3000
 
-## Usage
+## 可信仓库配置
 
-### Web UI
+Live Preview 只运行配置中的可信仓库。
 
-1. Open http://localhost:3000
-2. Enter GitHub URL (e.g., `https://github.com/vitejs/vite`)
-3. Select mode: Auto / Screenshot / Live Preview
-4. Click "Preview"
+编辑 `.gitpreview/trusted-repos.json`：
 
-### API
+```json
+{
+  "repos": [
+    {
+      "owner": "vitejs",
+      "repo": "vite",
+      "ref": "main",
+      "allowScripts": false,
+      "startCommand": "npm run dev",
+      "port": 5173
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `owner` | 仓库所有者 |
+| `repo` | 仓库名 |
+| `ref` | 固定分支/commit（可选） |
+| `allowScripts` | 是否允许 npm scripts（默认 false） |
+| `startCommand` | 自定义启动命令（可选） |
+| `port` | 自定义端口（可选） |
+
+## 安全说明
+
+- 服务仅监听 `127.0.0.1`，不支持公网访问
+- 不读取或传递 GITHUB_TOKEN 给被预览项目
+- 默认使用 `npm ci --ignore-scripts` 安装依赖
+- 只有配置中的可信仓库可以运行 Live Preview
+- 进程树终止、超时回收、端口释放
+
+## API
 
 ```bash
-# Screenshot mode
-curl -X POST http://localhost:3000/api/preview \
+# 截图模式
+curl -X POST http://127.0.0.1:3000/api/preview \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/vitejs/vite", "mode": "screenshot"}'
+  -d '{"url": "https://github.com/octocat/Hello-World", "mode": "screenshot"}'
 
-# Live preview mode
-curl -X POST http://localhost:3000/api/preview \
+# Live Preview（需在可信列表中）
+curl -X POST http://127.0.0.1:3000/api/preview \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/vitejs/vite", "mode": "live"}'
 
-# Auto mode (tries live, falls back to screenshot)
-curl -X POST http://localhost:3000/api/preview \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/vitejs/vite", "mode": "auto"}'
+# 健康检查
+curl http://127.0.0.1:3000/api/health
 ```
 
-### Browser Extension
-
-1. Open `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension` folder
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/preview` | POST | Create preview |
-| `/api/health` | GET | Health check |
-| `/api/governance` | GET | Governance status |
-| `/api/governance/alerts` | GET | Get alerts |
-| `/api/governance/cleanup` | POST | Manual cleanup |
-| `/api/discovery` | GET | Discovery data |
-| `/api/search?q=xxx` | GET | Search projects |
-| `/api/trending` | GET | Trending projects |
-| `/api/categories` | GET | Categories |
-| `/api/favorites` | GET/POST | Favorites |
-| `/api/history` | GET | Browsing history |
-| `/metrics` | GET | Prometheus metrics |
-
-## Modules
-
-| Module | Description |
-|--------|-------------|
-| `github-repo-manager` | URL validation, cloning, caching |
-| `screenshot-service` | Puppeteer screenshots |
-| `preview-runner` | Process isolation, port management |
-| `repo-analyzer` | README, tech stack, license detection |
-| `discovery` | Trending, search, categories, favorites |
-| `history` | Browsing history, statistics |
-| `governance` | Disk quota, rate limiting, cleanup |
-| `websocket` | Real-time progress updates |
-| `web-server` | Express API, static files |
-
-## Security
-
-- Environment variable isolation (no GITHUB_TOKEN leaked)
-- Command injection prevention
-- Script whitelist (blocks postinstall, preinstall, etc.)
-- Process tree termination
-- Concurrent preview limits
-- Rate limiting per IP
-
-## Monitoring
-
-### Prometheus Metrics
+## 开发
 
 ```bash
-curl http://localhost:3000/metrics
+npm test        # 运行测试
+npm run lint    # 代码检查
+npm run build   # 构建
 ```
 
-Available metrics:
-- `http_request_duration_seconds` - Request duration
-- `http_requests_total` - Total requests
-- `preview_created_total` - Previews created
-- `active_previews` - Active previews
-- `ws_connections` - WebSocket connections
-- `disk_usage_bytes` - Disk usage
-- `task_queue_size` - Task queue size
-
-### Health Check
-
-```bash
-curl http://localhost:3000/api/health
-```
-
-Returns:
-- Status (healthy/degraded/unhealthy)
-- Disk usage
-- Memory usage
-- Process count
-- Task queue stats
-
-## Deployment
-
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
-
-**Recommended:** VPS with Node.js 18+
-
-**Not supported:** Vercel, Netlify, Lambda
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm test -- --coverage
-
-# Run specific suite
-npm test -- --testPathPattern=governance
-```
-
-## Project Structure
+## 项目结构
 
 ```
 gitpreview/
 ├── src/
 │   ├── modules/
-│   │   ├── github-repo-manager/
-│   │   ├── screenshot-service/
-│   │   ├── preview-runner/
-│   │   ├── repo-analyzer/
-│   │   ├── discovery/
-│   │   ├── history/
-│   │   ├── governance/
-│   │   ├── websocket/
-│   │   └── web-server/
+│   │   ├── github-repo-manager/   # 仓库管理
+│   │   ├── screenshot-service/    # 截图服务
+│   │   ├── preview-runner/        # 预览运行
+│   │   ├── repo-analyzer/         # 仓库分析
+│   │   ├── trusted-repos/         # 可信仓库
+│   │   └── web-server/            # Web 服务
 │   ├── config/
 │   └── utils/
-├── public/
-├── extension/
-├── tests/
-└── docs/
+├── .gitpreview/                   # 可信仓库配置
+├── public/                        # 前端
+└── tests/
 ```
 
 ## License

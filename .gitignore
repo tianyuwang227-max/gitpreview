@@ -1,9 +1,9 @@
 node_modules/
 dist/
 projects/
-data/repos.json
+data/
 .env
 *.log
 .DS_Store
 coverage/
-.repo-config
+.gitpreview/trusted-repos.json
