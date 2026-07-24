@@ -27,11 +27,53 @@ npm run build
 cp .gitpreview/trusted-repos.json.example .gitpreview/trusted-repos.json
 # 编辑 .gitpreview/trusted-repos.json
 
-# 启动（仅本地访问）
+# 启动
 npm start
 ```
 
 访问 http://127.0.0.1:3000
+
+## 安装到 Dock (macOS)
+
+### 方法一：直接使用
+
+1. 打开 Finder，进入项目目录
+2. 双击 `macos/GitPreview.app`
+3. 服务自动启动，浏览器自动打开
+4. 将 `GitPreview.app` 拖到 Dock 即可固定
+
+### 方法二：复制到 Applications
+
+```bash
+# 复制到应用程序目录
+cp -R "/Users/clay/Documents/Default Project/gitpreview/macos/GitPreview.app" /Applications/
+
+# 从 Launchpad 或 Applications 打开
+```
+
+### 启动器行为
+
+- 首次启动：自动启动服务，打开浏览器
+- 服务已运行：直接打开浏览器
+- 启动失败：显示错误提示，查看日志 `~/Library/Logs/GitPreview/server.log`
+
+## 停止服务
+
+### 方法一：脚本停止
+
+```bash
+./scripts/stop-local.sh
+```
+
+### 方法二：手动停止
+
+```bash
+# 查找进程
+cat ~/Library/Application\ Support/GitPreview/server.pid
+
+# 停止进程
+kill <PID>
+```
 
 ## 可信仓库配置
 
@@ -75,17 +117,17 @@ Live Preview 只运行配置中的可信仓库。
 
 ```bash
 # 截图模式
-curl -X POST http://127.0.0.1:3000/api/preview \
+curl -X POST http://127.0.0.1:3010/api/preview \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/octocat/Hello-World", "mode": "screenshot"}'
 
 # Live Preview（需在可信列表中）
-curl -X POST http://127.0.0.1:3000/api/preview \
+curl -X POST http://127.0.0.1:3010/api/preview \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/vitejs/vite", "mode": "live"}'
 
 # 健康检查
-curl http://127.0.0.1:3000/api/health
+curl http://127.0.0.1:3010/api/health
 ```
 
 ## 开发
@@ -111,6 +153,8 @@ gitpreview/
 │   ├── config/
 │   └── utils/
 ├── .gitpreview/                   # 可信仓库配置
+├── macos/                         # macOS 启动器
+├── scripts/                       # 服务脚本
 ├── public/                        # 前端
 └── tests/
 ```

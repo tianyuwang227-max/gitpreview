@@ -874,14 +874,36 @@
         return;
       }
 
+      const mode = getPreviewMode();
+
+      if (mode === 'live') {
+        const trusted = await checkTrusted(url);
+        if (!trusted) {
+          const confirmed = confirm(
+            `This repository is not in your trusted list.\n\n` +
+            `Live Preview will run the code locally.\n` +
+            `Only add repositories you trust.\n\n` +
+            `Do you want to add this repository to your trusted list?`
+          );
+
+          if (!confirmed) {
+            return;
+          }
+
+          const added = await addToTrusted(url);
+          if (!added) {
+            showError('Failed to add repository to trusted list');
+            return;
+          }
+        }
+      }
+
       isProcessing = true;
       hideError();
       hideAllPreviews();
       showLoading();
       btn.disabled = true;
       updateProgressUI(0, 'Submitting request...');
-
-      const mode = getPreviewMode();
 
       try {
         updateProgressUI(10, 'Processing request...');
@@ -918,6 +940,30 @@
         isProcessing = false;
       }
     }, 300);
+
+    async function checkTrusted(url) {
+      try {
+        const response = await fetch(`/api/trusted-repos/check?url=${encodeURIComponent(url)}`);
+        const data = await response.json();
+        return data.success && data.data.trusted;
+      } catch {
+        return false;
+      }
+    }
+
+    async function addToTrusted(url) {
+      try {
+        const response = await fetch('/api/trusted-repos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await response.json();
+        return data.success;
+      } catch {
+        return false;
+      }
+    }
 
     async function waitForPreviewReady(id, maxAttempts = 60) {
       for (let i = 0; i < maxAttempts; i++) {

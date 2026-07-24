@@ -15,6 +15,12 @@ import {
   stopPreview,
   getPreview,
 } from '../preview-runner';
+import {
+  isRepoTrusted,
+  addTrustedRepo,
+  getAllTrustedRepos,
+} from '../trusted-repos';
+import { validateGithubUrl } from '../github-repo-manager/validator';
 import { getHealthStatus } from '../../utils/health';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
@@ -183,6 +189,84 @@ export function createServer() {
       res.json({
         success: true,
         data: { message: 'Preview stopped' },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/trusted-repos', async (req: Request, res: Response) => {
+    const repos = await getAllTrustedRepos();
+    res.json({
+      success: true,
+      data: { repos },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/trusted-repos/check', async (req: Request, res: Response) => {
+    const { url } = req.query;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_URL', message: 'URL is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const validation = validateGithubUrl(url as string);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_URL', message: validation.error },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const { owner, repo } = validation as { owner: string; repo: string };
+    const trusted = await isRepoTrusted(owner, repo);
+
+    res.json({
+      success: true,
+      data: { trusted, owner, repo },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.post('/api/trusted-repos', async (req: Request, res: Response, next: NextFunction) => {
+    const { url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_URL', message: 'URL is required' },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const validation = validateGithubUrl(url);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_URL', message: validation.error },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const { owner, repo } = validation as { owner: string; repo: string };
+
+    try {
+      await addTrustedRepo({
+        owner,
+        repo,
+        allowScripts: false,
+      });
+
+      res.json({
+        success: true,
+        data: { message: `Added ${owner}/${repo} to trusted repos` },
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

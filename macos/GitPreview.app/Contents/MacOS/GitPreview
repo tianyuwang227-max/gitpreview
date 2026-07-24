@@ -1,0 +1,31 @@
+#!/usr/bin/osascript
+
+on run
+    set healthURL to "http://127.0.0.1:3010/api/health"
+    set browserURL to "http://127.0.0.1:3010"
+    set scriptsDir to "/Users/clay/Documents/Default Project/gitpreview/scripts"
+    
+    try
+        do shell script "curl -s -o /dev/null -w \"%{http_code}\" " & healthURL
+        
+        if result is "200" then
+            do shell script "open " & browserURL
+            return
+        end if
+    end try
+    
+    do shell script quoted form of (scriptsDir & "/run-local.sh") & " > /dev/null 2>&1 &"
+    
+    repeat with i from 1 to 20
+        delay 1
+        try
+            do shell script "curl -s -o /dev/null -w \"%{http_code}\" " & healthURL
+            if result is "200" then
+                do shell script "open " & browserURL
+                return
+            end if
+        end try
+    end repeat
+    
+    display dialog "GitPreview failed to start." & return & return & "Please check the log:" & return & "~/Library/Logs/GitPreview/server.log" buttons {"OK"} default button "OK" with icon stop with title "GitPreview"
+end run

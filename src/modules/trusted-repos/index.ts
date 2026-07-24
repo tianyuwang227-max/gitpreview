@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import path from 'path';
 import { TrustedRepo, TrustedReposConfig } from './types';
 import { config } from '../../config';
 import { logger } from '../../utils/logger';
@@ -27,16 +28,34 @@ export function clearCache(): void {
 }
 
 export async function isRepoTrusted(owner: string, repo: string): Promise<boolean> {
-  const config = await loadTrustedRepos();
-  return config.repos.some(r => r.owner === owner && r.repo === repo);
+  const cfg = await loadTrustedRepos();
+  return cfg.repos.some(r => r.owner === owner && r.repo === repo);
 }
 
 export async function getTrustedRepo(owner: string, repo: string): Promise<TrustedRepo | null> {
-  const config = await loadTrustedRepos();
-  return config.repos.find(r => r.owner === owner && r.repo === repo) || null;
+  const cfg = await loadTrustedRepos();
+  return cfg.repos.find(r => r.owner === owner && r.repo === repo) || null;
 }
 
 export async function getAllTrustedRepos(): Promise<TrustedRepo[]> {
-  const config = await loadTrustedRepos();
-  return config.repos;
+  const cfg = await loadTrustedRepos();
+  return cfg.repos;
+}
+
+export async function addTrustedRepo(repo: TrustedRepo): Promise<void> {
+  const cfg = await loadTrustedRepos();
+
+  const exists = cfg.repos.some(r => r.owner === repo.owner && r.repo === repo.repo);
+  if (exists) {
+    logger.info(`Repo ${repo.owner}/${repo.repo} already trusted`);
+    return;
+  }
+
+  cfg.repos.push(repo);
+  cachedConfig = cfg;
+
+  await fs.mkdir(path.dirname(config.paths.trustedRepos), { recursive: true });
+  await fs.writeFile(config.paths.trustedRepos, JSON.stringify(cfg, null, 2));
+
+  logger.info(`Added trusted repo: ${repo.owner}/${repo.repo}`);
 }
