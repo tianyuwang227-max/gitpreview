@@ -1,9 +1,9 @@
 import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { randomUUID } from 'crypto';
 import { Alert, GovernanceConfig, DEFAULT_GOVERNANCE_CONFIG } from './types';
 import { getDiskUsage, checkDiskQuota, cleanupOldFiles } from './disk';
 import { accessTracker } from './access';
 import { logger } from '../../utils/logger';
-import { v4 as uuidv4 } from 'uuid';
 
 export class GovernanceManager {
   private config: GovernanceConfig;
@@ -92,7 +92,7 @@ export class GovernanceManager {
     threshold: number
   ): Alert {
     const alert: Alert = {
-      id: uuidv4(),
+      id: randomUUID(),
       type,
       severity,
       message,

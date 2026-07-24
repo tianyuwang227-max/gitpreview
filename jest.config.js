@@ -7,6 +7,6 @@ module.exports = {
     '^.+\\.ts$': 'ts-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!puppeteer|puppeteer-core)',
+    'node_modules/(?!(rate-limiter-flexible)/)',
   ],
 };

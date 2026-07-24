@@ -1,128 +1,101 @@
 # GitPreview
 
-> Preview GitHub projects without deployment. Explore, analyze, and preview repositories instantly.
+Preview GitHub repositories instantly - both screenshots and live running previews.
 
 [![CI](https://github.com/tianyuwang227-max/gitpreview/actions/workflows/ci.yml/badge.svg)](https://github.com/tianyuwang227-max/gitpreview/actions/workflows/ci.yml)
 
 ## Features
 
-- **Instant Preview** - Get repository screenshots without cloning
-- **Live Preview** - Run projects in Docker containers (experimental)
-- **Repository Analysis** - README summary, directory structure, tech stack detection
-- **Discovery** - Browse trending projects, search, and categorize
-- **Favorites** - Save and manage your favorite repositories
+- **Repository Preview** - Get screenshots or live running previews
+- **Project Detection** - Auto-detect Node.js, Python, Static projects
+- **Framework Support** - Vite, React, Vue, Next.js, Svelte, Express, etc.
+- **Real-time Progress** - WebSocket-based progress updates
+- **Security** - Sandboxed execution, rate limiting, resource quotas
+- **Governance** - Disk monitoring, auto-cleanup, access stats
 
 ## Quick Start
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/tianyuwang227-max/gitpreview.git
 cd gitpreview
 
-# Install dependencies
-npm install
+# Install
+npm ci
 
-# Start the server
-npm run dev
+# Build
+npm run build
+
+# Run
+npm start
 ```
 
 Open http://localhost:3000
 
-## Docker Deployment
-
-```bash
-# Build image
-docker build -t gitpreview .
-
-# Run container
-docker run -p 3000:3000 -e GITHUB_TOKEN=your_token gitpreview
-```
-
-## API Documentation
+## API
 
 ### Preview
 
 ```bash
-# Synchronous preview
+# Screenshot mode
 curl -X POST http://localhost:3000/api/preview \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/facebook/react"}'
+  -d '{"url": "https://github.com/vitejs/vite", "mode": "screenshot"}'
 
-# Asynchronous preview with Docker
+# Live preview mode
 curl -X POST http://localhost:3000/api/preview \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com/facebook/react", "async": true, "useDocker": true}'
-```
+  -d '{"url": "https://github.com/vitejs/vite", "mode": "live"}'
 
-### Discovery
-
-```bash
-# Get trending projects
-curl http://localhost:3000/api/trending
-
-# Search projects
-curl http://localhost:3000/api/search?q=react
-
-# Get categories
-curl http://localhost:3000/api/categories
-```
-
-### Favorites
-
-```bash
-# Get favorites
-curl http://localhost:3000/api/favorites
-
-# Add favorite
-curl -X POST http://localhost:3000/api/favorites \
+# Auto mode (tries live, falls back to screenshot)
+curl -X POST http://localhost:3000/api/preview \
   -H "Content-Type: application/json" \
-  -d '{"fullName": "facebook/react"}'
-
-# Remove favorite
-curl -X DELETE http://localhost:3000/api/favorites/facebook/react
+  -d '{"url": "https://github.com/vitejs/vite", "mode": "auto"}'
 ```
 
-## Project Structure
+### Governance
 
-```
-gitpreview/
-├── src/
-│   ├── modules/
-│   │   ├── github-repo-manager/   # GitHub URL validation & cloning
-│   │   ├── screenshot-service/    # Puppeteer screenshots
-│   │   ├── docker-runner/         # Docker container management
-│   │   ├── repo-analyzer/         # Repository analysis
-│   │   ├── discovery/             # Project discovery & favorites
-│   │   └── web-server/            # Express API server
-│   ├── config/                    # Configuration
-│   └── utils/                     # Utilities (logger, errors, cache, task-queue)
-├── public/                        # Frontend pages
-├── tests/                         # Test suites
-├── Dockerfile                     # Docker deployment
-└── .github/workflows/             # CI/CD
+```bash
+# Get system status
+curl http://localhost:3000/api/governance
+
+# Get alerts
+curl http://localhost:3000/api/governance/alerts
+
+# Manual cleanup
+curl -X POST http://localhost:3000/api/governance/cleanup
 ```
 
-## Tech Stack
+## Modules
 
-| Category | Technology |
-|----------|------------|
-| Language | TypeScript |
-| Runtime | Node.js |
-| Web Framework | Express |
-| Git Operations | simple-git |
-| Screenshots | Puppeteer |
-| Containerization | Docker |
-| Testing | Jest |
-| Linting | ESLint |
+| Module | Description |
+|--------|-------------|
+| `github-repo-manager` | URL validation, cloning, caching |
+| `screenshot-service` | Puppeteer screenshots |
+| `preview-runner` | Process isolation, port management |
+| `repo-analyzer` | README, tech stack, license detection |
+| `discovery` | Trending, search, categories, favorites |
+| `history` | Browsing history, statistics |
+| `governance` | Disk quota, rate limiting, cleanup |
+| `websocket` | Real-time progress updates |
+| `web-server` | Express API, static files |
 
-## Environment Variables
+## Security
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| GITHUB_TOKEN | GitHub API token | - |
-| CLONE_BASE_DIR | Clone directory | ./projects |
-| CLONE_TIMEOUT | Clone timeout (ms) | 60000 |
-| PORT | Server port | 3000 |
+- Environment variable isolation (no GITHUB_TOKEN leaked)
+- Command injection prevention
+- Script whitelist (blocks postinstall, preinstall, etc.)
+- Process tree termination
+- Concurrent preview limits
+- Rate limiting per IP
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+
+**Recommended:** VPS with Node.js 18+
+
+**Not supported:** Vercel, Netlify, Lambda (no long-running processes)
 
 ## Testing
 
@@ -130,21 +103,13 @@ gitpreview/
 # Run all tests
 npm test
 
-# Run specific test suite
-npm test -- --testPathPattern=validator
-
 # Run with coverage
 npm test -- --coverage
+
+# Run specific suite
+npm test -- --testPathPattern=governance
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details
+MIT
